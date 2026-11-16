@@ -1,0 +1,708 @@
+openapi: 3.1.0
+info:
+  # Do not change the title; generated import paths depend on it.
+  title: Api
+  version: 0.1.0
+  description: NSS Connect API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: public
+  - name: auth
+  - name: student
+  - name: events
+  - name: staff
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /public/overview:
+    get:
+      operationId: getPublicOverview
+      tags: [public]
+      summary: Get public landing page events and announcement
+      responses:
+        "200":
+          description: Public overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicOverview"
+  /auth/session:
+    get:
+      operationId: getSession
+      tags: [auth]
+      summary: Get the current signed-in user
+      responses:
+        "200":
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in with email or student ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: End the current session
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /auth/students:
+    post:
+      operationId: registerStudent
+      tags: [auth]
+      summary: Create a student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentSignupInput"
+      responses:
+        "201":
+          description: Student account created and signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "409":
+          description: Email or student ID already exists
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: Browse published NSS events
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, completed, all]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+  /events/{eventId}:
+    get:
+      operationId: getEvent
+      tags: [events]
+      summary: Get event details
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "404":
+          description: Event not found
+  /events/{eventId}/registration:
+    post:
+      operationId: registerForEvent
+      tags: [events]
+      summary: Register the current student for an event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "201":
+          description: Registration created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRegistration"
+        "409":
+          description: Registration is closed or already exists
+    delete:
+      operationId: cancelEventRegistration
+      tags: [events]
+      summary: Cancel the current student's registration
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Registration cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /student/dashboard:
+    get:
+      operationId: getStudentDashboard
+      tags: [student]
+      summary: Get student dashboard totals and upcoming events
+      responses:
+        "200":
+          description: Student dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentDashboard"
+        "401":
+          description: Sign in required
+  /student/attendance:
+    get:
+      operationId: listStudentAttendance
+      tags: [student]
+      summary: List the current student's attendance and verified hours
+      responses:
+        "200":
+          description: Attendance history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+  /student/profile:
+    get:
+      operationId: getStudentProfile
+      tags: [student]
+      summary: Get the current student's profile
+      responses:
+        "200":
+          description: Student profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProfile"
+    patch:
+      operationId: updateStudentProfile
+      tags: [student]
+      summary: Update permitted profile fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProfile"
+  /student/password:
+    post:
+      operationId: changeStudentPassword
+      tags: [student]
+      summary: Change the current student's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChangeInput"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "400":
+          description: Current password did not match
+  /announcements:
+    get:
+      operationId: listAnnouncements
+      tags: [student]
+      summary: List published announcements for students
+      responses:
+        "200":
+          description: Published announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+  /announcements/{announcementId}/read:
+    post:
+      operationId: markAnnouncementRead
+      tags: [student]
+      summary: Mark an announcement as read
+      parameters:
+        - $ref: "#/components/parameters/AnnouncementId"
+      responses:
+        "200":
+          description: Read status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /staff/dashboard:
+    get:
+      operationId: getStaffDashboard
+      tags: [staff]
+      summary: Get staff metrics and recent activity
+      responses:
+        "200":
+          description: Staff dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffDashboard"
+  /staff/students:
+    get:
+      operationId: listStudents
+      tags: [staff]
+      summary: Search registered students
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentProfile"
+  /staff/events:
+    post:
+      operationId: createEvent
+      tags: [staff]
+      summary: Create an NSS event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+  /staff/events/{eventId}:
+    patch:
+      operationId: updateEvent
+      tags: [staff]
+      summary: Update an NSS event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventUpdate"
+      responses:
+        "200":
+          description: Event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+  /staff/events/{eventId}/publish:
+    post:
+      operationId: publishEvent
+      tags: [staff]
+      summary: Publish an event to students
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+  /staff/events/{eventId}/cancel:
+    post:
+      operationId: cancelEvent
+      tags: [staff]
+      summary: Cancel a published event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+  /staff/events/{eventId}/registrations:
+    get:
+      operationId: listEventRegistrations
+      tags: [staff]
+      summary: List students registered for an event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      responses:
+        "200":
+          description: Event participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventRegistration"
+  /staff/registrations/{registrationId}/attendance:
+    patch:
+      operationId: recordAttendance
+      tags: [staff]
+      summary: Record or update verified attendance
+      parameters:
+        - name: registrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceInput"
+      responses:
+        "200":
+          description: Attendance updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventRegistration"
+  /staff/announcements:
+    get:
+      operationId: listManageAnnouncements
+      tags: [staff]
+      summary: List announcements including drafts
+      responses:
+        "200":
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Announcement"
+    post:
+      operationId: createAnnouncement
+      tags: [staff]
+      summary: Create and publish an announcement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementInput"
+      responses:
+        "201":
+          description: Announcement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+  /staff/announcements/{announcementId}:
+    patch:
+      operationId: updateAnnouncement
+      tags: [staff]
+      summary: Edit an announcement
+      parameters:
+        - $ref: "#/components/parameters/AnnouncementId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementUpdate"
+      responses:
+        "200":
+          description: Announcement updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+    delete:
+      operationId: deleteAnnouncement
+      tags: [staff]
+      summary: Delete an announcement
+      parameters:
+        - $ref: "#/components/parameters/AnnouncementId"
+      responses:
+        "200":
+          description: Announcement deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /staff/reports/volunteer-hours:
+    get:
+      operationId: downloadVolunteerHoursReport
+      tags: [staff]
+      summary: Download verified volunteer-hours report as CSV
+      responses:
+        "200":
+          description: CSV report
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+components:
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: integer
+    AnnouncementId:
+      name: announcementId
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+    ActionResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        studentId: { type: ["string", "null"] }
+        role: { type: string, enum: [student, staff] }
+      required: [id, name, email, studentId, role]
+    AuthSession:
+      type: object
+      properties:
+        authenticated: { type: boolean }
+        user: { oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] }
+        csrfToken: { type: ["string", "null"] }
+      required: [authenticated, user, csrfToken]
+    LoginInput:
+      type: object
+      properties:
+        identifier: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1 }
+      required: [identifier, password]
+    StudentSignupInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        email: { type: string, format: email }
+        studentId: { type: string, minLength: 1, maxLength: 60 }
+        department: { type: string, minLength: 1, maxLength: 120 }
+        year: { type: integer, minimum: 1, maximum: 8 }
+        phone: { type: string, maxLength: 40 }
+        password: { type: string, minLength: 10 }
+      required: [name, email, studentId, department, year, password]
+    PublicOverview:
+      type: object
+      properties:
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        announcement:
+          oneOf: [{ $ref: "#/components/schemas/Announcement" }, { type: "null" }]
+      required: [events, announcement]
+    Event:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        venue: { type: string }
+        registrationDeadline: { type: string, format: date-time }
+        volunteerHours: { type: number }
+        status: { type: string, enum: [draft, published, cancelled, completed] }
+        registrationCount: { type: integer }
+        myRegistrationStatus:
+          type: ["string", "null"]
+          enum: [registered, attended, absent, cancelled, null]
+      required: [id, title, description, startsAt, endsAt, venue, registrationDeadline, volunteerHours, status, registrationCount, myRegistrationStatus]
+    EventInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 180 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        venue: { type: string, minLength: 1, maxLength: 180 }
+        registrationDeadline: { type: string, format: date-time }
+        volunteerHours: { type: number, minimum: 0, maximum: 24 }
+      required: [title, description, startsAt, endsAt, venue, registrationDeadline, volunteerHours]
+    EventUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 180 }
+        description: { type: string, minLength: 1 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        venue: { type: string, minLength: 1, maxLength: 180 }
+        registrationDeadline: { type: string, format: date-time }
+        volunteerHours: { type: number, minimum: 0, maximum: 24 }
+      minProperties: 1
+    EventRegistration:
+      type: object
+      properties:
+        id: { type: integer }
+        eventId: { type: integer }
+        eventTitle: { type: string }
+        studentId: { type: integer }
+        studentName: { type: string }
+        studentCode: { type: string }
+        department: { type: string }
+        registeredAt: { type: string, format: date-time }
+        attendanceStatus:
+          type: ["string", "null"]
+          enum: [attended, absent, null]
+        verifiedHours: { type: number }
+      required: [id, eventId, eventTitle, studentId, studentName, studentCode, department, registeredAt, attendanceStatus, verifiedHours]
+    AttendanceInput:
+      type: object
+      properties:
+        status: { type: string, enum: [attended, absent] }
+      required: [status]
+    AttendanceRecord:
+      type: object
+      properties:
+        registrationId: { type: integer }
+        eventId: { type: integer }
+        eventTitle: { type: string }
+        eventDate: { type: string, format: date-time }
+        venue: { type: string }
+        status: { type: string, enum: [attended, absent] }
+        verifiedHours: { type: number }
+      required: [registrationId, eventId, eventTitle, eventDate, venue, status, verifiedHours]
+    StudentProfile:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        studentId: { type: string }
+        department: { type: string }
+        year: { type: integer }
+        phone: { type: ["string", "null"] }
+        role: { type: string, enum: [student, staff] }
+        verifiedHours: { type: number }
+      required: [id, name, email, studentId, department, year, phone, role, verifiedHours]
+    StudentProfileUpdate:
+      type: object
+      properties:
+        department: { type: string, minLength: 1, maxLength: 120 }
+        year: { type: integer, minimum: 1, maximum: 8 }
+        phone: { type: string, maxLength: 40 }
+      minProperties: 1
+    PasswordChangeInput:
+      type: object
+      properties:
+        currentPassword: { type: string, minLength: 1 }
+        newPassword: { type: string, minLength: 10 }
+      required: [currentPassword, newPassword]
+    Announcement:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        body: { type: string }
+        published: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        isRead: { type: boolean }
+      required: [id, title, body, published, createdAt, isRead]
+    AnnouncementInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 180 }
+        body: { type: string, minLength: 1 }
+      required: [title, body]
+    AnnouncementUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 180 }
+        body: { type: string, minLength: 1 }
+        published: { type: boolean }
+      minProperties: 1
+    StudentDashboard:
+      type: object
+      properties:
+        registeredEvents: { type: integer }
+        completedActivities: { type: integer }
+        attendedActivities: { type: integer }
+        verifiedHours: { type: number }
+        upcomingEvents:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        unreadAnnouncements: { type: integer }
+      required: [registeredEvents, completedActivities, attendedActivities, verifiedHours, upcomingEvents, unreadAnnouncements]
+    StaffDashboard:
+      type: object
+      properties:
+        totalStudents: { type: integer }
+        upcomingEvents: { type: integer }
+        completedEvents: { type: integer }
+        totalRegistrations: { type: integer }
+        attendedStudents: { type: integer }
+        verifiedVolunteerHours: { type: number }
+        recentEvents:
+          type: array
+          items: { $ref: "#/components/schemas/Event" }
+        recentRegistrations:
+          type: array
+          items: { $ref: "#/components/schemas/EventRegistration" }
+      required: [totalStudents, upcomingEvents, completedEvents, totalRegistrations, attendedStudents, verifiedVolunteerHours, recentEvents, recentRegistrations]

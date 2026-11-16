@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "NSS Connect"
+description = "A role-based NSS management portal for college students and staffs, with event registration, attendance, verified volunteer hours, announcements, and downloadable reports."
+version = "1.0.0"
+id = "artifacts/nss-connect"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19912
+
+[services.development]
+run = "pnpm --filter @workspace/nss-connect run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nss-connect", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/nss-connect/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19912"
+BASE_PATH = "/"
