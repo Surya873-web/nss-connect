@@ -7,6 +7,7 @@ import {
   ValidateStaffInvitationBody,
 } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
+import { isUniqueViolation } from "../lib/db-errors";
 import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
 
 const router: IRouter = Router();
@@ -132,15 +133,6 @@ async function createStaffAccount(name: string, password: string) {
     })
     .returning();
   return user;
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
 }
 
 export default router;

@@ -25,6 +25,7 @@ import {
   registrationsTable,
   usersTable,
 } from "@workspace/db";
+import { isUniqueViolation } from "../lib/db-errors";
 import {
   attachOptionalSession,
   requireCsrf,
@@ -236,15 +237,6 @@ export async function getRegistrationView(eventId: number, studentId: number) {
         ? Number(row.event.volunteerHours)
         : 0,
   };
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
 }
 
 export default router;

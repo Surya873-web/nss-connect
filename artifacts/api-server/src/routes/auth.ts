@@ -13,6 +13,7 @@ import {
   UpdateStudentProfileResponse,
 } from "@workspace/api-zod";
 import { db, authSessionsTable, usersTable } from "@workspace/db";
+import { isUniqueViolation } from "../lib/db-errors";
 import {
   clearSession,
   createSession,
@@ -218,14 +219,5 @@ router.post(
     res.json(ChangeStudentPasswordResponse.parse({ ok: true }));
   },
 );
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
-}
 
 export default router;
