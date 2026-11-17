@@ -135,6 +135,44 @@ export const RegisterStudentResponse = zod.object({
 
 
 /**
+ * @summary Send a staff signup code to the authorized email address
+ */
+export const RequestStaffSignupCodeResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Create a staff account with an email signup code
+ */
+export const registerStaffBodyNameMin = 2;
+export const registerStaffBodyNameMax = 120;
+
+export const registerStaffBodyCodeRegExp = new RegExp('^[0-9]{6}$');
+export const registerStaffBodyPasswordMin = 12;
+
+
+
+export const RegisterStaffBody = zod.object({
+  "name": zod.string().min(registerStaffBodyNameMin).max(registerStaffBodyNameMax),
+  "code": zod.string().regex(registerStaffBodyCodeRegExp),
+  "password": zod.string().min(registerStaffBodyPasswordMin)
+})
+
+export const RegisterStaffResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "user": zod.union([zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "studentId": zod.string().nullable(),
+  "role": zod.enum(['student', 'staff'])
+}),zod.null()]),
+  "csrfToken": zod.string().nullable()
+})
+
+
+/**
  * @summary Browse published NSS events
  */
 export const ListEventsQueryParams = zod.object({

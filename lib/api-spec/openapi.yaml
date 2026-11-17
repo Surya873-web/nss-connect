@@ -103,6 +103,42 @@ paths:
                 $ref: "#/components/schemas/AuthSession"
         "409":
           description: Email or student ID already exists
+  /auth/staff/code:
+    post:
+      operationId: requestStaffSignupCode
+      tags: [auth]
+      summary: Send a staff signup code to the authorized email address
+      responses:
+        "200":
+          description: Signup code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "429":
+          description: A code was recently sent
+  /auth/staff:
+    post:
+      operationId: registerStaff
+      tags: [auth]
+      summary: Create a staff account with an email signup code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffSignupInput"
+      responses:
+        "201":
+          description: Staff account created and signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "400":
+          description: Invalid or expired signup code
+        "409":
+          description: An account already uses the authorized email address
   /events:
     get:
       operationId: listEvents
@@ -549,6 +585,13 @@ components:
         phone: { type: string, maxLength: 40 }
         password: { type: string, minLength: 10 }
       required: [name, email, studentId, department, year, password]
+    StaffSignupInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        code: { type: string, pattern: "^[0-9]{6}$" }
+        password: { type: string, minLength: 12 }
+      required: [name, code, password]
     PublicOverview:
       type: object
       properties:

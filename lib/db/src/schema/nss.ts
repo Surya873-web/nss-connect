@@ -33,6 +33,18 @@ export const usersTable = pgTable(
   ],
 );
 
+export const staffSignupCodesTable = pgTable(
+  "nss_staff_signup_codes",
+  {
+    email: text("email").primaryKey(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("nss_staff_signup_codes_expires_at_idx").on(table.expiresAt)],
+);
+
 export const authSessionsTable = pgTable(
   "nss_auth_sessions",
   {

@@ -32,12 +32,13 @@ import type {
   EventRegistration,
   EventUpdate,
   HealthStatus,
-  StaffDashboard,
   ListEventsParams,
   ListStudentsParams,
   LoginInput,
   PasswordChangeInput,
   PublicOverview,
+  StaffDashboard,
+  StaffSignupInput,
   StudentDashboard,
   StudentProfile,
   StudentProfileUpdate,
@@ -550,6 +551,168 @@ export const useRegisterStudent = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRegisterStudentMutationOptions(options));
+    }
+
+export const getRequestStaffSignupCodeUrl = () => {
+
+
+
+
+  return `/api/auth/staff/code`
+}
+
+/**
+ * @summary Send a staff signup code to the authorized email address
+ */
+export const requestStaffSignupCode = async ( options?: Parameters<typeof customFetch>[1]): Promise<ActionResult> => {
+
+  return customFetch<ActionResult>(getRequestStaffSignupCodeUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestStaffSignupCodeMutationKey = () => ['requestStaffSignupCode'] as const;
+
+export const getRequestStaffSignupCodeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext> => {
+
+const mutationKey = getRequestStaffSignupCodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestStaffSignupCode>>, void> = () => {
+
+
+          return  requestStaffSignupCode(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestStaffSignupCodeMutationResult = NonNullable<Awaited<ReturnType<typeof requestStaffSignupCode>>>
+
+    export type RequestStaffSignupCodeMutationError = ErrorType<void>
+
+
+    /**
+ * @summary Send a staff signup code to the authorized email address
+ */
+export const useRequestStaffSignupCode = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestStaffSignupCode>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRequestStaffSignupCodeMutationOptions(options));
+    }
+
+export const getRegisterStaffUrl = () => {
+
+
+
+
+  return `/api/auth/staff`
+}
+
+/**
+ * @summary Create a staff account with an email signup code
+ */
+export const registerStaff = async (staffSignupInput: StaffSignupInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AuthSession>(getRegisterStaffUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(staffSignupInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterStaffMutationKey = () => ['registerStaff'] as const;
+
+export const getRegisterStaffMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerStaff>>, TError,RegisterStaffMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerStaff>>, TError,RegisterStaffMutationVariables, TContext> => {
+
+const mutationKey = getRegisterStaffMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerStaff>>, RegisterStaffMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerStaff(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterStaffMutationResult = NonNullable<Awaited<ReturnType<typeof registerStaff>>>
+    export type RegisterStaffMutationBody = BodyType<StaffSignupInput>
+    export type RegisterStaffMutationError = ErrorType<void>
+    export type RegisterStaffMutationVariables = {data: BodyType<StaffSignupInput>}
+
+    /**
+ * @summary Create a staff account with an email signup code
+ */
+export const useRegisterStaff = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerStaff>>, TError,RegisterStaffMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerStaff>>,
+        TError,
+        RegisterStaffMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRegisterStaffMutationOptions(options));
     }
 
 export const getListEventsUrl = (params?: ListEventsParams,) => {

@@ -72,6 +72,18 @@ export interface StudentSignupInput {
   password: string;
 }
 
+export interface StaffSignupInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  /** @pattern ^[0-9]{6}$ */
+  code: string;
+  /** @minLength 12 */
+  password: string;
+}
+
 export type EventStatus = typeof EventStatus[keyof typeof EventStatus];
 
 
