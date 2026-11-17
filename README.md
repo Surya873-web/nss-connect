@@ -10,11 +10,11 @@ The supplied project brief requested Flask and MySQL. This Replit project is bui
 
 The project uses the provisioned PostgreSQL database and the managed app preview. Use the **NSS Connect** preview to open the app. The API runs at `/api`.
 
-Staff can create the designated staff login from **Staff login → Create staff login**. A six-digit, one-time code is emailed to the authorized address, and expires after 10 minutes. Email delivery requires a Resend API key and a verified sender address.
+Staff can create the designated staff login from **Staff login → Create staff login**. A six-digit, one-time code is emailed to the authorized address and expires after 10 minutes. Email is sent from the designated Gmail account using SMTP.
 
-Set `RESEND_API_KEY` and `STAFF_EMAIL_FROM` in the deployment's private environment variables. `STAFF_EMAIL_FROM` must use a sender domain verified with Resend. The authorized staff email is fixed in the API to `suryasaravanan542@gmail.com`; only that address can receive the signup code and become the new staff login.
+Enable 2-Step Verification for `suryasaravanan542@gmail.com`, create a Google App Password for Mail, and set it as `GMAIL_APP_PASSWORD` in the deployment's private environment variables. Use the App Password, not the normal Gmail password. The authorized staff email is fixed in the API to `suryasaravanan542@gmail.com`; only that address can receive the signup code and become the new staff login.
 
-For local development, set these email variables as well as `DATABASE_URL` and `SESSION_SECRET`. The old one-time staff bootstrap command remains available:
+For local development, set `GMAIL_APP_PASSWORD` as well as `DATABASE_URL` and `SESSION_SECRET`. The old one-time staff bootstrap command remains available:
 
 ```sh
 pnpm --filter @workspace/api-server run create-staff
@@ -26,7 +26,7 @@ The command prompts for the name, email, and a password without echoing the pass
 
 1. Download the NSS Connect source ZIP from the project chat and extract it.
 2. Install Node.js 24 and pnpm, then run `pnpm install` from the extracted project folder.
-3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string and set `SESSION_SECRET` to a random value of at least 32 characters. To enable staff signup, also configure `RESEND_API_KEY` and `STAFF_EMAIL_FROM` with a verified Resend sender. Do not commit `.env`.
+3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string and set `SESSION_SECRET` to a random value of at least 32 characters. To enable staff signup, enable Google 2-Step Verification, generate an App Password for Mail, and set it as `GMAIL_APP_PASSWORD`. Do not commit `.env`.
 4. Load those environment values in your terminal before running the commands below. On macOS/Linux, use `set -a; source .env; set +a`.
 5. Create the database tables with `pnpm --filter @workspace/db run push`, or apply `database/schema.sql` with `psql "$DATABASE_URL" -f database/schema.sql`.
 6. In one terminal, start the API with `PORT=5000 pnpm --filter @workspace/api-server run dev`.
@@ -55,7 +55,7 @@ This Blueprint uses Render's free web-service and Postgres plans for an initial 
 ## Important setup notes
 
 - Student sign-in accepts email or student ID. Staff sign in at `/staff/login` using their staff email; access is read from the account record and never selected by the user.
-- The designated staff login can be created through the staff login page after entering the code delivered to `suryasaravanan542@gmail.com`. Email delivery requires the Resend environment variables above. The one-time local/Replit CLI command remains available as a bootstrap alternative.
+- The designated staff login can be created through the staff login page after entering the code delivered to `suryasaravanan542@gmail.com`. Email delivery requires `GMAIL_APP_PASSWORD`. The one-time local/Replit CLI command remains available as a bootstrap alternative.
 - Configure `DATABASE_URL` and `SESSION_SECRET` as private environment variables when hosting outside this project.
 - This project is ready for Replit publishing. For other hosts, run the API and web app as separate services and route `/api` to the API.
 

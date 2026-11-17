@@ -15,9 +15,7 @@ services:
         fromDatabase:
           name: nss-connect-db
           property: connectionString
-      - key: RESEND_API_KEY
-        sync: false
-      - key: STAFF_EMAIL_FROM
+      - key: GMAIL_APP_PASSWORD
         sync: false
 
 databases:

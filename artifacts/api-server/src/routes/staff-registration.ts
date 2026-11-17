@@ -1,6 +1,7 @@
 import { randomInt, timingSafeEqual } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
+import { createTransport } from "nodemailer";
 import { RegisterStaffBody, RegisterStaffResponse } from "@workspace/api-zod";
 import { db, staffSignupCodesTable, usersTable } from "@workspace/db";
 import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
@@ -13,11 +14,10 @@ const CODE_RESEND_DELAY_MS = 60 * 1000;
 const MAX_CODE_ATTEMPTS = 5;
 
 router.post("/auth/staff/code", async (_req, res): Promise<void> => {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.STAFF_EMAIL_FROM;
-  if (!apiKey || !from) {
+  const appPassword = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
+  if (!appPassword) {
     res.status(503).json({
-      error: "Staff signup email is not configured. Contact the site operator.",
+      error: "Gmail SMTP is not configured. Contact the site operator.",
     });
     return;
   }
@@ -63,34 +63,43 @@ router.post("/auth/staff/code", async (_req, res): Promise<void> => {
       set: { codeHash, attempts: 0, expiresAt, lastSentAt: now },
     });
 
-  let response: Response;
+  const transporter = createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user: STAFF_REGISTRATION_EMAIL, pass: appPassword },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 10_000,
+  });
   try {
-    response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [STAFF_REGISTRATION_EMAIL],
-        subject: "Your NSS Connect staff signup code",
-        text: `Your NSS Connect staff signup code is ${code}. It expires in 10 minutes and can only be used once.`,
-      }),
-      signal: AbortSignal.timeout(10_000),
+    await transporter.sendMail({
+      from: `NSS Connect <${STAFF_REGISTRATION_EMAIL}>`,
+      to: STAFF_REGISTRATION_EMAIL,
+      subject: "Your NSS Connect staff signup code",
+      text: `Your NSS Connect staff signup code is ${code}. It expires in 10 minutes and can only be used once.`,
     });
   } catch (error) {
     await invalidateSignupCode(codeHash);
-    logger.error({ err: error }, "Failed to send staff signup code");
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? error.code
+        : "UNKNOWN";
+    const responseCode =
+      typeof error === "object" &&
+      error !== null &&
+      "responseCode" in error &&
+      typeof error.responseCode === "number"
+        ? error.responseCode
+        : undefined;
+    logger.error({ code, responseCode }, "Failed to send staff signup code");
     res.status(502).json({ error: "Unable to send the signup code. Please try again later." });
     return;
-  }
-
-  if (!response.ok) {
-    await invalidateSignupCode(codeHash);
-    logger.error({ status: response.status }, "Email provider rejected staff signup code");
-    res.status(502).json({ error: "Unable to send the signup code. Please try again later." });
-    return;
+  } finally {
+    transporter.close();
   }
 
   res.json({ ok: true });
