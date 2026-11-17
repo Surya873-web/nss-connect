@@ -1,109 +1,16 @@
-import { randomInt, timingSafeEqual } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { createTransport } from "nodemailer";
 import { RegisterStaffBody, RegisterStaffResponse } from "@workspace/api-zod";
-import { db, staffSignupCodesTable, usersTable } from "@workspace/db";
+import { db, usersTable } from "@workspace/db";
 import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
-import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const STAFF_REGISTRATION_EMAIL = "suryasaravanan542@gmail.com";
-const CODE_TTL_MS = 10 * 60 * 1000;
-const CODE_RESEND_DELAY_MS = 60 * 1000;
-const MAX_CODE_ATTEMPTS = 5;
-
-router.post("/auth/staff/code", async (_req, res): Promise<void> => {
-  const appPassword = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
-  if (!appPassword) {
-    res.status(503).json({
-      error: "Gmail SMTP is not configured. Contact the site operator.",
-    });
-    return;
-  }
-
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, STAFF_REGISTRATION_EMAIL))
-    .limit(1);
-  if (existingUser) {
-    res.status(409).json({ error: "A staff login already exists for this email." });
-    return;
-  }
-
-  const now = new Date();
-  const [existingCode] = await db
-    .select({ lastSentAt: staffSignupCodesTable.lastSentAt })
-    .from(staffSignupCodesTable)
-    .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL))
-    .limit(1);
-  if (
-    existingCode &&
-    now.getTime() - existingCode.lastSentAt.getTime() < CODE_RESEND_DELAY_MS
-  ) {
-    res.status(429).json({ error: "Please wait a minute before requesting another code." });
-    return;
-  }
-
-  const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
-  const codeHash = digestToken(`${STAFF_REGISTRATION_EMAIL}:${code}`);
-  const expiresAt = new Date(now.getTime() + CODE_TTL_MS);
-  await db
-    .insert(staffSignupCodesTable)
-    .values({
-      email: STAFF_REGISTRATION_EMAIL,
-      codeHash,
-      attempts: 0,
-      expiresAt,
-      lastSentAt: now,
-    })
-    .onConflictDoUpdate({
-      target: staffSignupCodesTable.email,
-      set: { codeHash, attempts: 0, expiresAt, lastSentAt: now },
-    });
-
-  const transporter = createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: { user: STAFF_REGISTRATION_EMAIL, pass: appPassword },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 10_000,
-  });
-  try {
-    await transporter.sendMail({
-      from: `NSS Connect <${STAFF_REGISTRATION_EMAIL}>`,
-      to: STAFF_REGISTRATION_EMAIL,
-      subject: "Your NSS Connect staff signup code",
-      text: `Your NSS Connect staff signup code is ${code}. It expires in 10 minutes and can only be used once.`,
-    });
-  } catch (error) {
-    await invalidateSignupCode(codeHash);
-    const code =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      typeof error.code === "string"
-        ? error.code
-        : "UNKNOWN";
-    const responseCode =
-      typeof error === "object" &&
-      error !== null &&
-      "responseCode" in error &&
-      typeof error.responseCode === "number"
-        ? error.responseCode
-        : undefined;
-    logger.error({ code, responseCode }, "Failed to send staff signup code");
-    res.status(502).json({ error: "Unable to send the signup code. Please try again later." });
-    return;
-  } finally {
-    transporter.close();
-  }
-
-  res.json({ ok: true });
-});
+const INVITATION_PASSWORD_MIN_LENGTH = 16;
+const MAX_SIGNUP_ATTEMPTS = 5;
+const SIGNUP_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const signupAttempts = new Map<string, { count: number; resetAt: number }>();
 
 router.post("/auth/staff", async (req, res): Promise<void> => {
   const parsed = RegisterStaffBody.safeParse(req.body);
@@ -112,11 +19,50 @@ router.post("/auth/staff", async (req, res): Promise<void> => {
     return;
   }
 
+  const invitationPassword = process.env.STAFF_SIGNUP_INVITE_PASSWORD;
+  if (
+    !invitationPassword ||
+    invitationPassword.length < INVITATION_PASSWORD_MIN_LENGTH ||
+    invitationPassword.length > 128
+  ) {
+    res.status(503).json({
+      error: "Staff signup is not configured. Contact the site operator.",
+    });
+    return;
+  }
+
+  const attemptKey = req.ip ?? "unknown";
+  const now = Date.now();
+  const existingAttempt = signupAttempts.get(attemptKey);
+  if (
+    existingAttempt &&
+    existingAttempt.resetAt > now &&
+    existingAttempt.count >= MAX_SIGNUP_ATTEMPTS
+  ) {
+    res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
+    return;
+  }
+
   const data = parsed.data;
-  const suppliedHash = digestToken(`${STAFF_REGISTRATION_EMAIL}:${data.code}`);
-  let result: Awaited<ReturnType<typeof createStaffAccount>>;
+  const suppliedHash = Buffer.from(digestToken(`staff-signup:${data.invitationPassword}`), "hex");
+  const expectedHash = Buffer.from(digestToken(`staff-signup:${invitationPassword}`), "hex");
+  if (!timingSafeEqual(suppliedHash, expectedHash)) {
+    const count =
+      existingAttempt && existingAttempt.resetAt > now
+        ? existingAttempt.count + 1
+        : 1;
+    signupAttempts.set(attemptKey, {
+      count,
+      resetAt: now + SIGNUP_ATTEMPT_WINDOW_MS,
+    });
+    res.status(401).json({ error: "The staff invitation password is incorrect." });
+    return;
+  }
+  signupAttempts.delete(attemptKey);
+
+  let user: Awaited<ReturnType<typeof createStaffAccount>>;
   try {
-    result = await createStaffAccount(data.name.trim(), data.password, suppliedHash);
+    user = await createStaffAccount(data.name.trim(), data.password);
   } catch (error) {
     if (isUniqueViolation(error)) {
       res.status(409).json({ error: "A staff login already exists for this email." });
@@ -125,98 +71,34 @@ router.post("/auth/staff", async (req, res): Promise<void> => {
     throw error;
   }
 
-  if ("error" in result) {
-    res.status(400).json({ error: result.error });
-    return;
-  }
-
   const session = await createSession(
     {
-      id: result.user.id,
-      name: result.user.name,
-      email: result.user.email,
-      studentId: result.user.studentId,
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      studentId: user.studentId,
       role: "staff",
-      department: result.user.department,
-      year: result.user.year,
-      phone: result.user.phone,
+      department: user.department,
+      year: user.year,
+      phone: user.phone,
     },
     res,
   );
   res.status(201).json(RegisterStaffResponse.parse(session));
 });
 
-async function createStaffAccount(name: string, password: string, suppliedHash: string) {
-  return db.transaction(async (tx) => {
-    const [signupCode] = await tx
-      .select()
-      .from(staffSignupCodesTable)
-      .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL))
-      .for("update")
-      .limit(1);
-
-    if (!signupCode || signupCode.expiresAt <= new Date()) {
-      if (signupCode) {
-        await tx
-          .delete(staffSignupCodesTable)
-          .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL));
-      }
-      return { error: "The signup code is invalid or expired." } as const;
-    }
-
-    if (signupCode.attempts >= MAX_CODE_ATTEMPTS) {
-      await tx
-        .delete(staffSignupCodesTable)
-        .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL));
-      return { error: "Too many incorrect codes. Request a new code." } as const;
-    }
-
-    const matches = timingSafeEqual(
-      Buffer.from(signupCode.codeHash, "hex"),
-      Buffer.from(suppliedHash, "hex"),
-    );
-    if (!matches) {
-      const attempts = signupCode.attempts + 1;
-      if (attempts >= MAX_CODE_ATTEMPTS) {
-        await tx
-          .delete(staffSignupCodesTable)
-          .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL));
-        return { error: "Too many incorrect codes. Request a new code." } as const;
-      }
-      await tx
-        .update(staffSignupCodesTable)
-        .set({ attempts })
-        .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL));
-      return { error: "The signup code is invalid or expired." } as const;
-    }
-
-    const [user] = await tx
-      .insert(usersTable)
-      .values({
-        name,
-        email: STAFF_REGISTRATION_EMAIL,
-        studentId: null,
-        role: "staff",
-        passwordHash: hashPassword(password),
-      })
-      .returning();
-    await tx
-      .delete(staffSignupCodesTable)
-      .where(eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL));
-    return { user } as const;
-  });
-}
-
-async function invalidateSignupCode(codeHash: string): Promise<void> {
-  await db
-    .update(staffSignupCodesTable)
-    .set({ attempts: MAX_CODE_ATTEMPTS, expiresAt: new Date() })
-    .where(
-      and(
-        eq(staffSignupCodesTable.email, STAFF_REGISTRATION_EMAIL),
-        eq(staffSignupCodesTable.codeHash, codeHash),
-      ),
-    );
+async function createStaffAccount(name: string, password: string) {
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      name,
+      email: STAFF_REGISTRATION_EMAIL,
+      studentId: null,
+      role: "staff",
+      passwordHash: hashPassword(password),
+    })
+    .returning();
+  return user;
 }
 
 function isUniqueViolation(error: unknown): boolean {

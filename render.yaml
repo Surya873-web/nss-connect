@@ -15,7 +15,7 @@ services:
         fromDatabase:
           name: nss-connect-db
           property: connectionString
-      - key: GMAIL_APP_PASSWORD
+      - key: STAFF_SIGNUP_INVITE_PASSWORD
         sync: false
 
 databases:

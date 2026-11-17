@@ -553,80 +553,6 @@ export const useRegisterStudent = <TError = ErrorType<void>,
       return useMutation(getRegisterStudentMutationOptions(options));
     }
 
-export const getRequestStaffSignupCodeUrl = () => {
-
-
-
-
-  return `/api/auth/staff/code`
-}
-
-/**
- * @summary Send a staff signup code to the authorized email address
- */
-export const requestStaffSignupCode = async ( options?: Parameters<typeof customFetch>[1]): Promise<ActionResult> => {
-
-  return customFetch<ActionResult>(getRequestStaffSignupCodeUrl(),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-
-
-export const getRequestStaffSignupCodeMutationKey = () => ['requestStaffSignupCode'] as const;
-
-export const getRequestStaffSignupCodeMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext> => {
-
-const mutationKey = getRequestStaffSignupCodeMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestStaffSignupCode>>, void> = () => {
-
-
-          return  requestStaffSignupCode(requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RequestStaffSignupCodeMutationResult = NonNullable<Awaited<ReturnType<typeof requestStaffSignupCode>>>
-
-    export type RequestStaffSignupCodeMutationError = ErrorType<void>
-
-
-    /**
- * @summary Send a staff signup code to the authorized email address
- */
-export const useRequestStaffSignupCode = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestStaffSignupCode>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof requestStaffSignupCode>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getRequestStaffSignupCodeMutationOptions(options));
-    }
-
 export const getRegisterStaffUrl = () => {
 
 
@@ -636,7 +562,7 @@ export const getRegisterStaffUrl = () => {
 }
 
 /**
- * @summary Create a staff account with an email signup code
+ * @summary Create a staff account with an invitation password
  */
 export const registerStaff = async (staffSignupInput: StaffSignupInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
 
@@ -702,7 +628,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RegisterStaffMutationVariables = {data: BodyType<StaffSignupInput>}
 
     /**
- * @summary Create a staff account with an email signup code
+ * @summary Create a staff account with an invitation password
  */
 export const useRegisterStaff = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerStaff>>, TError,RegisterStaffMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

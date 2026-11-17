@@ -12,8 +12,11 @@ export interface StaffSignupInput {
      * @maxLength 120
      */
   name: string;
-  /** @pattern ^[0-9]{6}$ */
-  code: string;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  invitationPassword: string;
   /** @minLength 12 */
   password: string;
 }

@@ -135,27 +135,21 @@ export const RegisterStudentResponse = zod.object({
 
 
 /**
- * @summary Send a staff signup code to the authorized email address
- */
-export const RequestStaffSignupCodeResponse = zod.object({
-  "ok": zod.boolean()
-})
-
-
-/**
- * @summary Create a staff account with an email signup code
+ * @summary Create a staff account with an invitation password
  */
 export const registerStaffBodyNameMin = 2;
 export const registerStaffBodyNameMax = 120;
 
-export const registerStaffBodyCodeRegExp = new RegExp('^[0-9]{6}$');
+export const registerStaffBodyInvitationPasswordMin = 16;
+export const registerStaffBodyInvitationPasswordMax = 128;
+
 export const registerStaffBodyPasswordMin = 12;
 
 
 
 export const RegisterStaffBody = zod.object({
   "name": zod.string().min(registerStaffBodyNameMin).max(registerStaffBodyNameMax),
-  "code": zod.string().regex(registerStaffBodyCodeRegExp),
+  "invitationPassword": zod.string().min(registerStaffBodyInvitationPasswordMin).max(registerStaffBodyInvitationPasswordMax),
   "password": zod.string().min(registerStaffBodyPasswordMin)
 })
 
