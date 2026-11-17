@@ -127,6 +127,26 @@ paths:
           description: Too many invitation password attempts
         "409":
           description: An account already uses the authorized email address
+  /auth/staff/invitation:
+    post:
+      operationId: validateStaffInvitation
+      tags: [auth]
+      summary: Validate the staff invitation password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffInvitationInput"
+      responses:
+        "204":
+          description: Invitation password accepted
+        "401":
+          description: Invalid invitation password
+        "429":
+          description: Too many invitation password attempts
+        "503":
+          description: Staff signup is not configured
   /events:
     get:
       operationId: listEvents
@@ -577,9 +597,14 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 2, maxLength: 120 }
-        invitationPassword: { type: string, minLength: 16, maxLength: 128 }
+        invitationPassword: { type: string, minLength: 15, maxLength: 128 }
         password: { type: string, minLength: 12 }
       required: [name, invitationPassword, password]
+    StaffInvitationInput:
+      type: object
+      properties:
+        invitationPassword: { type: string, minLength: 15, maxLength: 128 }
+      required: [invitationPassword]
     PublicOverview:
       type: object
       properties:

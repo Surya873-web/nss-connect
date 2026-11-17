@@ -30,6 +30,7 @@ export * from './loginInput';
 export * from './passwordChangeInput';
 export * from './publicOverview';
 export * from './staffDashboard';
+export * from './staffInvitationInput';
 export * from './staffSignupInput';
 export * from './studentDashboard';
 export * from './studentProfile';

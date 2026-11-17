@@ -140,7 +140,7 @@ export const RegisterStudentResponse = zod.object({
 export const registerStaffBodyNameMin = 2;
 export const registerStaffBodyNameMax = 120;
 
-export const registerStaffBodyInvitationPasswordMin = 16;
+export const registerStaffBodyInvitationPasswordMin = 15;
 export const registerStaffBodyInvitationPasswordMax = 128;
 
 export const registerStaffBodyPasswordMin = 12;
@@ -164,6 +164,21 @@ export const RegisterStaffResponse = zod.object({
 }),zod.null()]),
   "csrfToken": zod.string().nullable()
 })
+
+
+/**
+ * @summary Validate the staff invitation password
+ */
+export const validateStaffInvitationBodyInvitationPasswordMin = 15;
+export const validateStaffInvitationBodyInvitationPasswordMax = 128;
+
+
+
+export const ValidateStaffInvitationBody = zod.object({
+  "invitationPassword": zod.string().min(validateStaffInvitationBodyInvitationPasswordMin).max(validateStaffInvitationBodyInvitationPasswordMax)
+})
+
+export const ValidateStaffInvitationResponse = zod.void()
 
 
 /**

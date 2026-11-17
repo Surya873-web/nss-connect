@@ -1,16 +1,39 @@
 import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { RegisterStaffBody, RegisterStaffResponse } from "@workspace/api-zod";
+import {
+  RegisterStaffBody,
+  RegisterStaffResponse,
+  ValidateStaffInvitationBody,
+} from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
 import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
 
 const router: IRouter = Router();
 const STAFF_REGISTRATION_EMAIL = "suryasaravanan542@gmail.com";
-const INVITATION_PASSWORD_MIN_LENGTH = 16;
+const INVITATION_PASSWORD_MIN_LENGTH = 15;
 const MAX_SIGNUP_ATTEMPTS = 5;
 const SIGNUP_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const signupAttempts = new Map<string, { count: number; resetAt: number }>();
+
+router.post("/auth/staff/invitation", async (req, res): Promise<void> => {
+  const parsed = ValidateStaffInvitationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const validationError = validateInvitationPassword(
+    parsed.data.invitationPassword,
+    req.ip ?? "unknown",
+  );
+  if (validationError) {
+    res.status(validationError.status).json({ error: validationError.message });
+    return;
+  }
+
+  res.status(204).end();
+});
 
 router.post("/auth/staff", async (req, res): Promise<void> => {
   const parsed = RegisterStaffBody.safeParse(req.body);
@@ -19,46 +42,12 @@ router.post("/auth/staff", async (req, res): Promise<void> => {
     return;
   }
 
-  const invitationPassword = process.env.STAFF_SIGNUP_INVITE_PASSWORD;
-  if (
-    !invitationPassword ||
-    invitationPassword.length < INVITATION_PASSWORD_MIN_LENGTH ||
-    invitationPassword.length > 128
-  ) {
-    res.status(503).json({
-      error: "Staff signup is not configured. Contact the site operator.",
-    });
-    return;
-  }
-
-  const attemptKey = req.ip ?? "unknown";
-  const now = Date.now();
-  const existingAttempt = signupAttempts.get(attemptKey);
-  if (
-    existingAttempt &&
-    existingAttempt.resetAt > now &&
-    existingAttempt.count >= MAX_SIGNUP_ATTEMPTS
-  ) {
-    res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
-    return;
-  }
-
   const data = parsed.data;
-  const suppliedHash = Buffer.from(digestToken(`staff-signup:${data.invitationPassword}`), "hex");
-  const expectedHash = Buffer.from(digestToken(`staff-signup:${invitationPassword}`), "hex");
-  if (!timingSafeEqual(suppliedHash, expectedHash)) {
-    const count =
-      existingAttempt && existingAttempt.resetAt > now
-        ? existingAttempt.count + 1
-        : 1;
-    signupAttempts.set(attemptKey, {
-      count,
-      resetAt: now + SIGNUP_ATTEMPT_WINDOW_MS,
-    });
-    res.status(401).json({ error: "The staff invitation password is incorrect." });
+  const validationError = validateInvitationPassword(data.invitationPassword, req.ip ?? "unknown");
+  if (validationError) {
+    res.status(validationError.status).json({ error: validationError.message });
     return;
   }
-  signupAttempts.delete(attemptKey);
 
   let user: Awaited<ReturnType<typeof createStaffAccount>>;
   try {
@@ -86,6 +75,50 @@ router.post("/auth/staff", async (req, res): Promise<void> => {
   );
   res.status(201).json(RegisterStaffResponse.parse(session));
 });
+
+function validateInvitationPassword(
+  suppliedPassword: string,
+  attemptKey: string,
+): { status: 401 | 429 | 503; message: string } | null {
+  const invitationPassword = process.env.STAFF_SIGNUP_INVITE_PASSWORD;
+  if (
+    !invitationPassword ||
+    invitationPassword.length < INVITATION_PASSWORD_MIN_LENGTH ||
+    invitationPassword.length > 128
+  ) {
+    return {
+      status: 503,
+      message: "Staff signup is not configured. Contact the site operator.",
+    };
+  }
+
+  const now = Date.now();
+  const existingAttempt = signupAttempts.get(attemptKey);
+  if (
+    existingAttempt &&
+    existingAttempt.resetAt > now &&
+    existingAttempt.count >= MAX_SIGNUP_ATTEMPTS
+  ) {
+    return { status: 429, message: "Too many attempts. Please wait 15 minutes." };
+  }
+
+  const suppliedHash = Buffer.from(digestToken(`staff-signup:${suppliedPassword}`), "hex");
+  const expectedHash = Buffer.from(digestToken(`staff-signup:${invitationPassword}`), "hex");
+  if (!timingSafeEqual(suppliedHash, expectedHash)) {
+    const count =
+      existingAttempt && existingAttempt.resetAt > now
+        ? existingAttempt.count + 1
+        : 1;
+    signupAttempts.set(attemptKey, {
+      count,
+      resetAt: now + SIGNUP_ATTEMPT_WINDOW_MS,
+    });
+    return { status: 401, message: "Incorrect password. Please try again." };
+  }
+
+  signupAttempts.delete(attemptKey);
+  return null;
+}
 
 async function createStaffAccount(name: string, password: string) {
   const [user] = await db

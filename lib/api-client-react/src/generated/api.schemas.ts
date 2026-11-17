@@ -79,12 +79,20 @@ export interface StaffSignupInput {
      */
   name: string;
   /**
-     * @minLength 16
+     * @minLength 15
      * @maxLength 128
      */
   invitationPassword: string;
   /** @minLength 12 */
   password: string;
+}
+
+export interface StaffInvitationInput {
+  /**
+     * @minLength 15
+     * @maxLength 128
+     */
+  invitationPassword: string;
 }
 
 export type EventStatus = typeof EventStatus[keyof typeof EventStatus];

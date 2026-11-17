@@ -10,9 +10,9 @@ The supplied project brief requested Flask and MySQL. This Replit project is bui
 
 The project uses the provisioned PostgreSQL database and the managed app preview. Use the **NSS Connect** preview to open the app. The API runs at `/api`.
 
-Staff can create the designated staff login from **Staff login → Create staff login** using the shared invitation password configured by the site operator. Each staff member chooses an individual password for their account.
+Staff can create the designated staff login from **Staff login → Create staff login** by first entering the shared staff-entry password, then choosing a name and individual account password. The entry password must be at least 15 characters.
 
-Set a unique secret of at least 16 characters as `STAFF_SIGNUP_INVITE_PASSWORD` in the deployment's private environment variables. Share it only with trusted staff; anyone who knows it can create the designated staff login. The authorized staff email is fixed in the API to `suryasaravanan542@gmail.com`.
+Set a unique secret of at least 15 characters as `STAFF_SIGNUP_INVITE_PASSWORD` in the deployment's private environment variables. Share it only with trusted staff; anyone who knows it can create the designated staff login. The authorized staff email is fixed in the API to `suryasaravanan542@gmail.com`.
 
 For local development, set `STAFF_SIGNUP_INVITE_PASSWORD` as well as `DATABASE_URL` and `SESSION_SECRET`. The old one-time staff bootstrap command remains available:
 
@@ -26,7 +26,7 @@ The command prompts for the name, email, and a password without echoing the pass
 
 1. Download the NSS Connect source ZIP from the project chat and extract it.
 2. Install Node.js 24 and pnpm, then run `pnpm install` from the extracted project folder.
-3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string, `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 16 characters. Do not commit `.env`.
+3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string, `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 15 characters. Do not commit `.env`.
 4. Load those environment values in your terminal before running the commands below. On macOS/Linux, use `set -a; source .env; set +a`.
 5. Create the database tables with `pnpm --filter @workspace/db run push`, or apply `database/schema.sql` with `psql "$DATABASE_URL" -f database/schema.sql`.
 6. In one terminal, start the API with `PORT=5000 pnpm --filter @workspace/api-server run dev`.
