@@ -79,7 +79,7 @@ function Shell({children,role}:{children:ReactNode;role:'student'|'staff'}) {
         <button className="side-link" onClick={()=>logout.mutate(undefined,{onSuccess:()=>{queryClient.setQueryData(getGetSessionQueryKey(),{authenticated:false,user:null,csrfToken:null});invalid(getGetSessionQueryKey());setLoc('/')}})} style={{display:'flex',gap:11,alignItems:'center;width:100%',border:0,background:'transparent',color:'inherit',padding:'8px 10px',cursor:'pointer',fontWeight:600}}><LogOut size={17}/> Sign out</button>
       </div>
     </aside>
-    <div style={{flex:1,minWidth:0,marginLeft:248}}>
+    <div className="app-content" style={{flex:1,minWidth:0,marginLeft:248}}>
       <header style={{height:68,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 clamp(18px,4vw,48px)',background:'hsl(var(--card)/.86)',borderBottom:'1px solid hsl(var(--border))',position:'sticky',top:0,zIndex:8,backdropFilter:'blur(14px)'}}>
         <Link href="/" className="brand-word mobile-brand" style={{display:'none',fontSize:21,color:'hsl(var(--primary))'}}>NSS Connect</Link>
         <div style={{fontSize:13,color:'hsl(var(--muted-foreground))'}}>{role==='student'?'Volunteer portal':'NSS staff workspace'}</div>
@@ -103,7 +103,7 @@ function RequireRole({role,children}:{role:'student'|'staff';children:ReactNode}
 }
 function AuthRedirect(){return <div style={{minHeight:'100dvh',display:'grid',placeItems:'center',color:'hsl(var(--muted-foreground))'}}>Taking you to secure sign in…</div>}
 function AuthLayout({children,caption}:{children:ReactNode;caption:string}) {
-  return <div className="grain" style={{minHeight:'100dvh',display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(320px,520px)',background:'hsl(var(--background))'}}>
+  return <div className="grain auth-layout" style={{minHeight:'100dvh',display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(320px,520px)',background:'hsl(var(--background))'}}>
     <section className="auth-art" style={{background:'hsl(213 64% 24%)',color:'white',padding:'clamp(28px,7vw,92px)',display:'flex',flexDirection:'column',justifyContent:'space-between',position:'relative',overflow:'hidden'}}>
       <div style={{position:'absolute',right:-140,bottom:-140,width:460,height:460,border:'1px solid hsl(195 75% 62%/.22)',borderRadius:'50%',boxShadow:'0 0 0 48px hsl(195 75% 62%/.05),0 0 0 100px hsl(195 75% 62%/.035)'}}/>
       <Link href="/" className="brand-word" style={{fontSize:26,display:'flex',alignItems:'center',gap:10,position:'relative'}}><HeartHandshake color="hsl(195 75% 62%)"/> NSS Connect</Link>
