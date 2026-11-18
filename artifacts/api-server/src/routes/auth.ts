@@ -77,6 +77,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .limit(1);
   if (
     !user ||
+    (parsed.data.role === "staff" && user.role !== "staff") ||
     (user.role === "staff" && user.email.toLowerCase() !== identifier.toLowerCase()) ||
     !verifyPassword(parsed.data.password, user.passwordHash)
   ) {

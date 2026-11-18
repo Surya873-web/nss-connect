@@ -5,10 +5,12 @@
  * NSS Connect API
  * OpenAPI spec version: 0.1.0
  */
+import type { LoginInputRole } from './loginInputRole';
 
 export interface LoginInput {
   /** @minLength 1 */
   identifier: string;
   /** @minLength 1 */
   password: string;
+  role?: LoginInputRole;
 }

@@ -69,7 +69,8 @@ export const GetSessionResponse = zod.object({
 
 export const LoginBody = zod.object({
   "identifier": zod.string().min(1),
-  "password": zod.string().min(1)
+  "password": zod.string().min(1),
+  "role": zod.enum(['student', 'staff']).optional()
 })
 
 export const LoginResponse = zod.object({

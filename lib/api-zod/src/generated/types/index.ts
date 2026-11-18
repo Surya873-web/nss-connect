@@ -28,6 +28,7 @@ export * from './listEventsParams';
 export * from './listEventsStatus';
 export * from './listStudentsParams';
 export * from './loginInput';
+export * from './loginInputRole';
 export * from './passwordChangeInput';
 export * from './publicOverview';
 export * from './staffAccount';

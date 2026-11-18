@@ -37,11 +37,20 @@ export interface AuthSession {
   csrfToken: string | null;
 }
 
+export type LoginInputRole = typeof LoginInputRole[keyof typeof LoginInputRole];
+
+
+export const LoginInputRole = {
+  student: 'student',
+  staff: 'staff',
+} as const;
+
 export interface LoginInput {
   /** @minLength 1 */
   identifier: string;
   /** @minLength 1 */
   password: string;
+  role?: LoginInputRole;
 }
 
 export interface StudentSignupInput {

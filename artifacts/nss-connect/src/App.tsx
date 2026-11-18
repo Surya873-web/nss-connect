@@ -18,7 +18,7 @@ import {
   useGetStudentProfile, useHealthCheck, useListAnnouncements, useListEvents, useListEventRegistrations,
   useListManageAnnouncements, useListStudentAttendance, useListStudents, useLogin, useLogout,
   useListStaffAccounts, useCreateStaffAccount, useDeleteStaffAccount,
-  useResetStaffPassword,
+  useRegisterStaff, useResetStaffPassword,
   useMarkAnnouncementRead, usePublishEvent, useRecordAttendance, useRegisterForEvent,
   useRegisterStudent, useUpdateAnnouncement, useUpdateEvent, useUpdateStudentProfile,
 } from '@workspace/api-client-react';
@@ -167,18 +167,56 @@ function EventCard({event,onRegister,registered=false,busy=false,publicMode=fals
 
 function Login({staff=false}:{staff?:boolean}){
   const login=useLogin();const [,setLoc]=useLocation();const [error,setError]=useState('');
-  const submit=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setError('');const d=new FormData(e.currentTarget);login.mutate({data:{identifier:String(d.get('identifier')).trim(),password:String(d.get('password'))}},{onSuccess:s=>{queryClient.setQueryData(getGetSessionQueryKey(),s);invalid(getGetSessionQueryKey());setLoc(s.user?.role==='staff'?'/staff/dashboard':'/student')},onError:e=>setError(msgError(e))});};
+  const submit=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setError('');const d=new FormData(e.currentTarget);login.mutate({data:{identifier:String(d.get('identifier')).trim(),password:String(d.get('password')), ...(staff?{role:'staff' as const}:{})}},{onSuccess:s=>{queryClient.setQueryData(getGetSessionQueryKey(),s);invalid(getGetSessionQueryKey());setLoc(s.user?.role==='staff'?'/staff/dashboard':'/student')},onError:e=>setError(msgError(e))});};
   return <AuthLayout caption={staff?'View NSS activities, coordinate student volunteers, record attendance, and create programs from one secure staff workspace.':'Your service activities, verified hours and NSS notices — all in one secure student portal.'}><div style={{width:'min(100%,390px)'}}><div className="eyebrow">{staff?'NSS staff portal':'Volunteer portal'}</div><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:32,letterSpacing:'-.05em',margin:'8px 0 7px'}}>{staff?'Staff login':'Volunteer sign in'}</h2><p style={{margin:'0 0 27px',color:'hsl(var(--muted-foreground))',fontSize:14,lineHeight:1.6}}>{staff?'Use the authorized staff email assigned by the site and your personal staff password.':'Use your registered email or student ID. Access is determined by your account.'}</p>
     <form onSubmit={submit} style={{display:'grid',gap:16}}><label className="field">{staff?'Staff email':'Email or student ID'}<input className="input" name="identifier" autoComplete="username" required data-testid="input-login-identifier" placeholder={staff?'Authorized staff email':'you@college.edu'}/></label><label className="field">Password<input className="input" type="password" name="password" autoComplete="current-password" required data-testid="input-login-password" placeholder="Your password"/></label>{error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13}}>{error}</div>}<button className="btn" disabled={login.isPending} data-testid="button-login">{login.isPending?'Signing in…':staff?'Staff sign in securely':'Sign in securely'} <ArrowRight size={16}/></button></form>
     {staff?<p style={{textAlign:'center',fontSize:13,color:'hsl(var(--muted-foreground))',marginTop:22}}>Forgot your password? <Link className="link" href="/staff/reset-password">Reset staff password</Link><br/>Staff accounts are created by NSS administrators.<br/>Student volunteer? <Link className="link" href="/login">Volunteer sign in</Link></p>:<p style={{textAlign:'center',fontSize:13,color:'hsl(var(--muted-foreground))',marginTop:22}}>New to your NSS unit? <Link className="link" href="/signup">Create a student account</Link><br/>NSS staff? <Link className="link" href="/staff/login">Staff login</Link></p>}<Link href="/" style={{display:'block',textAlign:'center',marginTop:22,fontSize:12,color:'hsl(var(--muted-foreground))'}}>← Back to public activities</Link>
   </div></AuthLayout>;
 }
 function StaffSignup(){
-  return <AuthLayout caption="Staff accounts are created and managed securely by authorized NSS staff administrators."><div style={{width:'min(100%,390px)'}}>
+  const signup=useRegisterStaff();
+  const [,setLoc]=useLocation();
+  const [error,setError]=useState('');
+  const [success,setSuccess]=useState('');
+  const submit=(e:FormEvent<HTMLFormElement>)=>{
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    const d=new FormData(e.currentTarget);
+    const password=String(d.get('password'));
+    const confirmPassword=String(d.get('confirmPassword'));
+    if(password!==confirmPassword){
+      setError('Password and Confirm Password must match.');
+      return;
+    }
+    signup.mutate({data:{
+      name:String(d.get('name')).trim(),
+      email:String(d.get('email')).trim(),
+      password,
+      confirmPassword,
+    }},{onSuccess:s=>{
+      queryClient.setQueryData(getGetSessionQueryKey(),s);
+      invalid(getGetSessionQueryKey());
+      setSuccess('Staff account created successfully.');
+      setLoc('/staff/dashboard');
+    },onError:e=>{
+      setError(e.status===409?'A staff account already uses that email address or the maximum staff limit has been reached.':msgError(e));
+    }});
+  };
+  return <AuthLayout caption="Create an authorized NSS staff account with a unique staff email and password."><div style={{width:'min(100%,390px)',maxHeight:'94dvh',overflowY:'auto',padding:'8px 4px'}}>
     <div className="eyebrow">NSS staff portal</div>
-    <h2 style={{fontFamily:'var(--app-font-serif)',fontSize:32,letterSpacing:'-.05em',margin:'8px 0 7px'}}>Staff account creation</h2>
-    <p style={{margin:'0 0 22px',color:'hsl(var(--muted-foreground))',fontSize:14,lineHeight:1.6}}>Public staff sign-up is disabled. Ask an authorized NSS staff administrator to create your account.</p>
-    <Link className="btn" href="/staff/login">Go to staff login</Link>
+    <h2 style={{fontFamily:'var(--app-font-serif)',fontSize:32,letterSpacing:'-.05em',margin:'8px 0 7px'}}>Create staff account</h2>
+    <p style={{margin:'0 0 20px',color:'hsl(var(--muted-foreground))',fontSize:14,lineHeight:1.6}}>Enter the staff member's details below.</p>
+    <form onSubmit={submit} style={{display:'grid',gap:14}}>
+      <label className="field">Staff Full Name<input className="input" name="name" required minLength={2} maxLength={120} autoComplete="name" data-testid="input-staff-signup-name"/></label>
+      <label className="field">Staff Email Address<input className="input" type="email" name="email" required autoComplete="email" data-testid="input-staff-signup-email"/></label>
+      <label className="field">Password<input className="input" type="password" name="password" required minLength={12} maxLength={128} autoComplete="new-password" data-testid="input-staff-signup-password"/></label>
+      <label className="field">Confirm Password<input className="input" type="password" name="confirmPassword" required minLength={12} maxLength={128} autoComplete="new-password" data-testid="input-staff-signup-confirm-password"/></label>
+      {error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13}}>{error}</div>}
+      {success&&<div role="status" style={{color:'hsl(155 48% 29%)',fontSize:13}}>{success}</div>}
+      <button className="btn" disabled={signup.isPending} data-testid="button-staff-signup">{signup.isPending?'Creating account…':'Create Staff'} <ArrowRight size={16}/></button>
+    </form>
+    <p style={{textAlign:'center',fontSize:13,color:'hsl(var(--muted-foreground))',marginTop:22}}>Already have a staff account? <Link className="link" href="/staff/login">Staff sign in</Link></p>
   </div></AuthLayout>;
 }
 function StaffPasswordReset(){

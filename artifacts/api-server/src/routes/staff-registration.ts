@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { authSessionsTable, db, usersTable } from "@workspace/db";
 import { isUniqueViolation } from "../lib/db-errors";
-import { createSession, digestToken, hashPassword, requireCsrf, requireRole } from "../lib/nss-auth";
+import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
 
 const router: IRouter = Router();
 const STAFF_REGISTRATION_EMAIL = "suryasaravanan542@gmail.com";
@@ -82,8 +82,6 @@ router.post("/auth/staff/password", async (req, res): Promise<void> => {
 
 router.post(
   "/auth/staff",
-  requireRole("staff"),
-  requireCsrf,
   async (req, res): Promise<void> => {
     const parsed = RegisterStaffBody.safeParse(req.body);
     if (!parsed.success) {

@@ -657,6 +657,7 @@ components:
       properties:
         identifier: { type: string, minLength: 1 }
         password: { type: string, minLength: 1 }
+        role: { type: string, enum: [student, staff] }
       required: [identifier, password]
     StudentSignupInput:
       type: object
