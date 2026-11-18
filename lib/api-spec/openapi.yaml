@@ -107,7 +107,7 @@ paths:
     post:
       operationId: registerStaff
       tags: [auth]
-      summary: Create a staff account with an invitation password
+      summary: Create a staff account
       requestBody:
         required: true
         content:
@@ -122,11 +122,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuthSession"
         "401":
-          description: Invalid invitation password
+          description: Authentication required
+        "403":
+          description: Staff role required
         "429":
-          description: Too many invitation password attempts
+          description: Too many staff creation attempts
         "409":
-          description: An account already uses the authorized email address
+          description: Email already exists or staff limit has been reached
   /auth/staff/invitation:
     post:
       operationId: validateStaffInvitation
@@ -143,6 +145,30 @@ paths:
           description: Invitation password accepted
         "401":
           description: Invalid invitation password
+        "429":
+          description: Too many invitation password attempts
+        "503":
+          description: Staff signup is not configured
+  /auth/staff/password:
+    post:
+      operationId: resetStaffPassword
+      tags: [auth]
+      summary: Reset the staff account password with the invitation password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffPasswordResetInput"
+      responses:
+        "204":
+          description: Staff password reset and existing sessions revoked
+        "400":
+          description: Invalid password reset request
+        "401":
+          description: Invalid invitation password
+        "404":
+          description: Staff account not found
         "429":
           description: Too many invitation password attempts
         "503":
@@ -333,6 +359,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StaffDashboard"
+  /staff/accounts:
+    get:
+      operationId: listStaffAccounts
+      tags: [staff]
+      summary: List registered staff accounts
+      responses:
+        "200":
+          description: Staff accounts and account limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccountDirectory"
+    post:
+      operationId: createStaffAccount
+      tags: [staff]
+      summary: Create a staff account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffAccountInput"
+      responses:
+        "201":
+          description: Staff account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccount"
+        "409":
+          description: Duplicate email or maximum staff limit reached
+  /staff/accounts/{staffId}:
+    delete:
+      operationId: deleteStaffAccount
+      tags: [staff]
+      summary: Delete a staff account
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Staff account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccountDeleteResult"
+        "404":
+          description: Staff account not found
   /staff/students:
     get:
       operationId: listStudents
@@ -597,14 +673,55 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 2, maxLength: 120 }
-        invitationPassword: { type: string, minLength: 15, maxLength: 128 }
+        email: { type: string, format: email }
         password: { type: string, minLength: 12 }
-      required: [name, invitationPassword, password]
+        confirmPassword: { type: string, minLength: 12, maxLength: 128 }
+      required: [name, email, password, confirmPassword]
+    CreateStaffAccountInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12, maxLength: 128 }
+        confirmPassword: { type: string, minLength: 12, maxLength: 128 }
+      required: [name, email, password, confirmPassword]
+    StaffAccount:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, email, createdAt]
+    StaffAccountDirectory:
+      type: object
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+        staff:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffAccount"
+      required: [total, limit, staff]
+    StaffAccountDeleteResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
     StaffInvitationInput:
       type: object
       properties:
         invitationPassword: { type: string, minLength: 15, maxLength: 128 }
       required: [invitationPassword]
+    StaffPasswordResetInput:
+      type: object
+      properties:
+        invitationPassword: { type: string, minLength: 15, maxLength: 128 }
+        newPassword: { type: string, minLength: 12, maxLength: 128 }
+      required: [invitationPassword, newPassword]
     PublicOverview:
       type: object
       properties:

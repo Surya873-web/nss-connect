@@ -135,22 +135,23 @@ export const RegisterStudentResponse = zod.object({
 
 
 /**
- * @summary Create a staff account with an invitation password
+ * @summary Create a staff account
  */
 export const registerStaffBodyNameMin = 2;
 export const registerStaffBodyNameMax = 120;
 
-export const registerStaffBodyInvitationPasswordMin = 15;
-export const registerStaffBodyInvitationPasswordMax = 128;
-
 export const registerStaffBodyPasswordMin = 12;
+
+export const registerStaffBodyConfirmPasswordMin = 12;
+export const registerStaffBodyConfirmPasswordMax = 128;
 
 
 
 export const RegisterStaffBody = zod.object({
   "name": zod.string().min(registerStaffBodyNameMin).max(registerStaffBodyNameMax),
-  "invitationPassword": zod.string().min(registerStaffBodyInvitationPasswordMin).max(registerStaffBodyInvitationPasswordMax),
-  "password": zod.string().min(registerStaffBodyPasswordMin)
+  "email": zod.string().email(),
+  "password": zod.string().min(registerStaffBodyPasswordMin),
+  "confirmPassword": zod.string().min(registerStaffBodyConfirmPasswordMin).max(registerStaffBodyConfirmPasswordMax)
 })
 
 export const RegisterStaffResponse = zod.object({
@@ -179,6 +180,25 @@ export const ValidateStaffInvitationBody = zod.object({
 })
 
 export const ValidateStaffInvitationResponse = zod.void()
+
+
+/**
+ * @summary Reset the staff account password with the invitation password
+ */
+export const resetStaffPasswordBodyInvitationPasswordMin = 15;
+export const resetStaffPasswordBodyInvitationPasswordMax = 128;
+
+export const resetStaffPasswordBodyNewPasswordMin = 12;
+export const resetStaffPasswordBodyNewPasswordMax = 128;
+
+
+
+export const ResetStaffPasswordBody = zod.object({
+  "invitationPassword": zod.string().min(resetStaffPasswordBodyInvitationPasswordMin).max(resetStaffPasswordBodyInvitationPasswordMax),
+  "newPassword": zod.string().min(resetStaffPasswordBodyNewPasswordMin).max(resetStaffPasswordBodyNewPasswordMax)
+})
+
+export const ResetStaffPasswordResponse = zod.void()
 
 
 /**
@@ -425,6 +445,69 @@ export const GetStaffDashboardResponse = zod.object({
   "attendanceStatus": zod.union([zod.literal('attended'),zod.literal('absent'),zod.literal(null)]).nullable(),
   "verifiedHours": zod.number()
 }))
+})
+
+
+/**
+ * @summary List registered staff accounts
+ */
+export const listStaffAccountsResponseTotalMin = 0;
+
+
+
+export const ListStaffAccountsResponse = zod.object({
+  "total": zod.number().int().min(listStaffAccountsResponseTotalMin),
+  "limit": zod.number().int(),
+  "staff": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create a staff account
+ */
+export const createStaffAccountBodyNameMin = 2;
+export const createStaffAccountBodyNameMax = 120;
+
+export const createStaffAccountBodyPasswordMin = 12;
+export const createStaffAccountBodyPasswordMax = 128;
+
+export const createStaffAccountBodyConfirmPasswordMin = 12;
+export const createStaffAccountBodyConfirmPasswordMax = 128;
+
+
+
+export const CreateStaffAccountBody = zod.object({
+  "name": zod.string().min(createStaffAccountBodyNameMin).max(createStaffAccountBodyNameMax),
+  "email": zod.string().email(),
+  "password": zod.string().min(createStaffAccountBodyPasswordMin).max(createStaffAccountBodyPasswordMax),
+  "confirmPassword": zod.string().min(createStaffAccountBodyConfirmPasswordMin).max(createStaffAccountBodyConfirmPasswordMax)
+})
+
+export const CreateStaffAccountResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a staff account
+ */
+
+
+
+export const DeleteStaffAccountParams = zod.object({
+  "staffId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteStaffAccountResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 

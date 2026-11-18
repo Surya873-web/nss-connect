@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS nss_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS nss_users_email_lower_unique
-  ON nss_users (email);
+  ON nss_users (LOWER(email));
 CREATE UNIQUE INDEX IF NOT EXISTS nss_users_student_id_unique
   ON nss_users (student_id);
 CREATE INDEX IF NOT EXISTS nss_users_name_idx

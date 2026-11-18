@@ -78,13 +78,51 @@ export interface StaffSignupInput {
      * @maxLength 120
      */
   name: string;
-  /**
-     * @minLength 15
-     * @maxLength 128
-     */
-  invitationPassword: string;
+  email: string;
   /** @minLength 12 */
   password: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  confirmPassword: string;
+}
+
+export interface CreateStaffAccountInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  email: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  password: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  confirmPassword: string;
+}
+
+export interface StaffAccount {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface StaffAccountDirectory {
+  /** @minimum 0 */
+  total: number;
+  limit: number;
+  staff: StaffAccount[];
+}
+
+export interface StaffAccountDeleteResult {
+  ok: boolean;
 }
 
 export interface StaffInvitationInput {
@@ -93,6 +131,19 @@ export interface StaffInvitationInput {
      * @maxLength 128
      */
   invitationPassword: string;
+}
+
+export interface StaffPasswordResetInput {
+  /**
+     * @minLength 15
+     * @maxLength 128
+     */
+  invitationPassword: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  newPassword: string;
 }
 
 export type EventStatus = typeof EventStatus[keyof typeof EventStatus];

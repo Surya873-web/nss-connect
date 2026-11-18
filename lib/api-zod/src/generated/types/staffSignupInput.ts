@@ -12,11 +12,12 @@ export interface StaffSignupInput {
      * @maxLength 120
      */
   name: string;
-  /**
-     * @minLength 15
-     * @maxLength 128
-     */
-  invitationPassword: string;
+  email: string;
   /** @minLength 12 */
   password: string;
+  /**
+     * @minLength 12
+     * @maxLength 128
+     */
+  confirmPassword: string;
 }

@@ -67,13 +67,19 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .select()
     .from(usersTable)
     .where(
-      or(
-        ilike(usersTable.email, identifier),
-        eq(usersTable.studentId, identifier),
-      ),
+      identifier.includes("@")
+        ? ilike(usersTable.email, identifier)
+        : or(
+            ilike(usersTable.email, identifier),
+            eq(usersTable.studentId, identifier),
+          ),
     )
     .limit(1);
-  if (!user || !verifyPassword(parsed.data.password, user.passwordHash)) {
+  if (
+    !user ||
+    (user.role === "staff" && user.email.toLowerCase() !== identifier.toLowerCase()) ||
+    !verifyPassword(parsed.data.password, user.passwordHash)
+  ) {
     const count =
       existingAttempt && existingAttempt.resetAt > now
         ? existingAttempt.count + 1

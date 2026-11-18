@@ -9,6 +9,7 @@ import {
   inArray,
   lt,
   or,
+  sql,
 } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
@@ -37,6 +38,11 @@ import {
   UpdateEventResponse,
   CancelEventParams,
   CancelEventResponse,
+  CreateStaffAccountBody,
+  CreateStaffAccountResponse,
+  DeleteStaffAccountParams,
+  DeleteStaffAccountResponse,
+  ListStaffAccountsResponse,
 } from "@workspace/api-zod";
 import {
   db,
@@ -45,7 +51,8 @@ import {
   registrationsTable,
   usersTable,
 } from "@workspace/db";
-import { requireCsrf, requireRole } from "../lib/nss-auth";
+import { hashPassword, requireCsrf, requireRole } from "../lib/nss-auth";
+import { isUniqueViolation } from "../lib/db-errors";
 import {
   eventDtos,
   studentProfileDto,
@@ -53,6 +60,123 @@ import {
 import { getRegistrationView } from "./events";
 
 const router: IRouter = Router();
+
+const STAFF_ACCOUNT_LIMIT = 100;
+
+router.get("/staff/accounts", requireRole("staff"), async (_req, res): Promise<void> => {
+  const [countRow] = await db
+    .select({ total: count() })
+    .from(usersTable)
+    .where(eq(usersTable.role, "staff"));
+  const staff = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.role, "staff"))
+    .orderBy(asc(usersTable.name));
+  res.json(
+    ListStaffAccountsResponse.parse({
+      total: countRow.total,
+      limit: STAFF_ACCOUNT_LIMIT,
+      staff: staff.map((account) => ({
+        ...account,
+        createdAt: account.createdAt.toISOString(),
+      })),
+    }),
+  );
+});
+
+router.post(
+  "/staff/accounts",
+  requireRole("staff"),
+  requireCsrf,
+  async (req, res): Promise<void> => {
+    const parsed = CreateStaffAccountBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (parsed.data.password !== parsed.data.confirmPassword) {
+      res.status(400).json({ error: "Password and Confirm Password must match." });
+      return;
+    }
+
+    try {
+      const account = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(3942026001)`);
+        const [countRow] = await tx
+          .select({ total: count() })
+          .from(usersTable)
+          .where(eq(usersTable.role, "staff"));
+        if (countRow.total >= STAFF_ACCOUNT_LIMIT) {
+          return null;
+        }
+        const [created] = await tx
+          .insert(usersTable)
+          .values({
+            name: parsed.data.name.trim(),
+            email: parsed.data.email.trim().toLowerCase(),
+            studentId: null,
+            role: "staff",
+            passwordHash: hashPassword(parsed.data.password),
+          })
+          .returning({
+            id: usersTable.id,
+            name: usersTable.name,
+            email: usersTable.email,
+            createdAt: usersTable.createdAt,
+          });
+        return created;
+      });
+      if (!account) {
+        res.status(409).json({ error: "Maximum staff limit reached." });
+        return;
+      }
+      res.status(201).json(
+        CreateStaffAccountResponse.parse({
+          ...account,
+          createdAt: account.createdAt.toISOString(),
+        }),
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        res.status(409).json({ error: "A staff account already uses that email address." });
+        return;
+      }
+      throw error;
+    }
+  },
+);
+
+router.delete(
+  "/staff/accounts/:staffId",
+  requireRole("staff"),
+  requireCsrf,
+  async (req, res): Promise<void> => {
+    const params = DeleteStaffAccountParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (params.data.staffId === req.auth!.id) {
+      res.status(409).json({ error: "You cannot delete the staff account you are currently using." });
+      return;
+    }
+    const [deleted] = await db
+      .delete(usersTable)
+      .where(and(eq(usersTable.id, params.data.staffId), eq(usersTable.role, "staff")))
+      .returning({ id: usersTable.id });
+    if (!deleted) {
+      res.status(404).json({ error: "Staff account not found." });
+      return;
+    }
+    res.json(DeleteStaffAccountResponse.parse({ ok: true }));
+  },
+);
 
 router.get("/staff/dashboard", requireRole("staff"), async (_req, res): Promise<void> => {
   const now = new Date();
