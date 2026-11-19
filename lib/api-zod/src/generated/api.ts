@@ -136,7 +136,8 @@ export const RegisterStudentResponse = zod.object({
 
 
 /**
- * @summary Create a staff account
+ * @deprecated
+ * @summary Legacy public staff registration (disabled)
  */
 export const registerStaffBodyNameMin = 2;
 export const registerStaffBodyNameMax = 120;
@@ -155,17 +156,7 @@ export const RegisterStaffBody = zod.object({
   "confirmPassword": zod.string().min(registerStaffBodyConfirmPasswordMin).max(registerStaffBodyConfirmPasswordMax)
 })
 
-export const RegisterStaffResponse = zod.object({
-  "authenticated": zod.boolean(),
-  "user": zod.union([zod.object({
-  "id": zod.number().int(),
-  "name": zod.string(),
-  "email": zod.string(),
-  "studentId": zod.string().nullable(),
-  "role": zod.enum(['student', 'staff'])
-}),zod.null()]),
-  "csrfToken": zod.string().nullable()
-})
+export const RegisterStaffResponse = zod.void()
 
 
 /**
@@ -316,9 +307,174 @@ export const ListStudentAttendanceResponseItem = zod.object({
   "eventDate": zod.coerce.date(),
   "venue": zod.string(),
   "status": zod.enum(['attended', 'absent']),
+  "attendanceAt": zod.coerce.date().nullable(),
   "verifiedHours": zod.number()
 })
 export const ListStudentAttendanceResponse = zod.array(ListStudentAttendanceResponseItem)
+
+
+/**
+ * @summary Mark the signed-in student's attendance with an event QR token
+ */
+export const submitQrAttendanceBodyTokenMin = 32;
+export const submitQrAttendanceBodyTokenMax = 64;
+
+
+
+export const SubmitQrAttendanceBody = zod.object({
+  "token": zod.string().min(submitQrAttendanceBodyTokenMin).max(submitQrAttendanceBodyTokenMax)
+})
+
+export const SubmitQrAttendanceResponse = zod.object({
+  "registrationId": zod.number().int(),
+  "eventId": zod.number().int(),
+  "attendanceAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List the current student's volunteer certificates
+ */
+export const ListStudentCertificatesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "certificateId": zod.string(),
+  "eventId": zod.number().int(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "issuedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable()
+})
+export const ListStudentCertificatesResponse = zod.array(ListStudentCertificatesResponseItem)
+
+
+/**
+ * @summary Request a certificate for verified participation in an event
+ */
+
+
+
+export const RequestVolunteerCertificateBody = zod.object({
+  "eventId": zod.number().int().min(1)
+})
+
+export const RequestVolunteerCertificateResponse = zod.object({
+  "id": zod.number().int(),
+  "certificateId": zod.string(),
+  "eventId": zod.number().int(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "issuedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable()
+})
+
+
+/**
+ * @summary Download an approved certificate PDF owned by the current student
+ */
+export const DownloadVolunteerCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const DownloadVolunteerCertificateResponse = zod.unknown()
+
+
+/**
+ * @summary List certificate requests for staff review
+ */
+export const listStaffCertificatesQueryStatusDefault = `pending`;
+
+export const ListStaffCertificatesQueryParams = zod.object({
+  "status": zod.enum(['pending', 'approved', 'rejected']).default(listStaffCertificatesQueryStatusDefault)
+})
+
+export const ListStaffCertificatesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "certificateId": zod.string(),
+  "eventId": zod.number().int(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "issuedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable()
+}).and(zod.object({
+  "studentId": zod.number().int(),
+  "studentName": zod.string(),
+  "studentCode": zod.string(),
+  "studentEmail": zod.string()
+}))
+export const ListStaffCertificatesResponse = zod.array(ListStaffCertificatesResponseItem)
+
+
+/**
+ * @summary Approve and issue a certificate
+ */
+export const ApproveVolunteerCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const ApproveVolunteerCertificateResponse = zod.object({
+  "id": zod.number().int(),
+  "certificateId": zod.string(),
+  "eventId": zod.number().int(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "issuedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable()
+})
+
+
+/**
+ * @summary Reject a certificate request with a reason
+ */
+export const RejectVolunteerCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const rejectVolunteerCertificateBodyReasonMin = 3;
+export const rejectVolunteerCertificateBodyReasonMax = 500;
+
+
+
+export const RejectVolunteerCertificateBody = zod.object({
+  "reason": zod.string().min(rejectVolunteerCertificateBodyReasonMin).max(rejectVolunteerCertificateBodyReasonMax)
+})
+
+export const RejectVolunteerCertificateResponse = zod.object({
+  "id": zod.number().int(),
+  "certificateId": zod.string(),
+  "eventId": zod.number().int(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "requestedAt": zod.coerce.date(),
+  "issuedAt": zod.coerce.date().nullable(),
+  "rejectionReason": zod.string().nullable()
+})
+
+
+/**
+ * @summary Verify an issued volunteer certificate
+ */
+export const VerifyVolunteerCertificateParams = zod.object({
+  "certificateId": zod.coerce.string()
+})
+
+export const VerifyVolunteerCertificateResponse = zod.object({
+  "certificateId": zod.string(),
+  "studentName": zod.string(),
+  "collegeName": zod.string(),
+  "unitName": zod.string(),
+  "eventTitle": zod.string(),
+  "volunteerHours": zod.number(),
+  "issuedAt": zod.coerce.date()
+})
 
 
 /**
@@ -679,6 +835,42 @@ export const ListEventRegistrationsResponseItem = zod.object({
   "verifiedHours": zod.number()
 })
 export const ListEventRegistrationsResponse = zod.array(ListEventRegistrationsResponseItem)
+
+
+/**
+ * @summary Create a short-lived attendance QR token for an event
+ */
+export const CreateAttendanceQrParams = zod.object({
+  "eventId": zod.coerce.number().int()
+})
+
+export const createAttendanceQrBodyExpiresInSecondsMin = 30;
+export const createAttendanceQrBodyExpiresInSecondsMax = 900;
+
+
+
+export const CreateAttendanceQrBody = zod.object({
+  "expiresInSeconds": zod.number().int().min(createAttendanceQrBodyExpiresInSecondsMin).max(createAttendanceQrBodyExpiresInSecondsMax)
+})
+
+export const CreateAttendanceQrResponse = zod.object({
+  "id": zod.number().int(),
+  "eventId": zod.number().int(),
+  "token": zod.string(),
+  "expiresAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Revoke an attendance QR token
+ */
+export const RevokeAttendanceQrParams = zod.object({
+  "qrId": zod.coerce.number().int()
+})
+
+export const RevokeAttendanceQrResponse = zod.object({
+  "ok": zod.boolean()
+})
 
 
 /**

@@ -6,6 +6,8 @@ import staffRouter from "./staff";
 import staffRegistrationRouter from "./staff-registration";
 import publicRouter from "./public";
 import studentRouter from "./student";
+import attendanceRouter from "./attendance";
+import certificatesRouter from "./certificates";
 
 const router: IRouter = Router();
 
@@ -14,6 +16,8 @@ router.use(authRouter);
 router.use(staffRegistrationRouter);
 router.use(publicRouter);
 router.use(eventsRouter);
+router.use(attendanceRouter);
+router.use(certificatesRouter);
 router.use(studentRouter);
 router.use(staffRouter);
 

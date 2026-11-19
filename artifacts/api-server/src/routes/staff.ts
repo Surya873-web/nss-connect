@@ -1,16 +1,3 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  ilike,
-  inArray,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateAnnouncementBody,
@@ -46,6 +33,16 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  like,
+  lt,
+  or,
   announcementsTable,
   eventsTable,
   registrationsTable,
@@ -53,6 +50,7 @@ import {
 } from "@workspace/db";
 import { hashPassword, requireCsrf, requireRole } from "../lib/nss-auth";
 import { isUniqueViolation } from "../lib/db-errors";
+import { recordStaffAction } from "../lib/staff-audit";
 import {
   eventDtos,
   studentProfileDto,
@@ -107,7 +105,14 @@ router.post(
 
     try {
       const account = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(3942026001)`);
+        const [lockRow] = await tx
+          .select({ id: usersTable.id })
+          .from(usersTable)
+          .where(eq(usersTable.role, "staff"))
+          .orderBy(asc(usersTable.id))
+          .limit(1)
+          .for("update");
+        if (!lockRow) return null;
         const [countRow] = await tx
           .select({ total: count() })
           .from(usersTable)
@@ -124,18 +129,26 @@ router.post(
             role: "staff",
             passwordHash: hashPassword(parsed.data.password),
           })
-          .returning({
+          .$returningId();
+        const [account] = await tx
+          .select({
             id: usersTable.id,
             name: usersTable.name,
             email: usersTable.email,
             createdAt: usersTable.createdAt,
-          });
-        return created;
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, created.id))
+          .limit(1);
+        return account;
       });
       if (!account) {
         res.status(409).json({ error: "Maximum staff limit reached." });
         return;
       }
+      await recordStaffAction(req.auth!.id, "staff_account.created", "staff_account", account.id, {
+        email: account.email,
+      });
       res.status(201).json(
         CreateStaffAccountResponse.parse({
           ...account,
@@ -169,11 +182,11 @@ router.delete(
     const [deleted] = await db
       .delete(usersTable)
       .where(and(eq(usersTable.id, params.data.staffId), eq(usersTable.role, "staff")))
-      .returning({ id: usersTable.id });
-    if (!deleted) {
+    if (deleted.affectedRows !== 1) {
       res.status(404).json({ error: "Staff account not found." });
       return;
     }
+    await recordStaffAction(req.auth!.id, "staff_account.deleted", "staff_account", params.data.staffId);
     res.json(DeleteStaffAccountResponse.parse({ ok: true }));
   },
 );
@@ -191,13 +204,16 @@ router.get("/staff/dashboard", requireRole("staff"), async (_req, res): Promise<
   const [completed] = await db
     .select({ total: count() })
     .from(eventsTable)
-    .where(and(eq(eventsTable.status, "published"), lt(eventsTable.startsAt, now)));
+    .where(and(eq(eventsTable.status, "published"), lt(eventsTable.endsAt, now)));
   const [registrations] = await db
     .select({ total: count() })
     .from(registrationsTable)
     .where(eq(registrationsTable.status, "registered"));
   const attendedRows = await db
-    .select({ eventHours: eventsTable.volunteerHours })
+    .select({
+      attendanceHours: registrationsTable.attendanceHours,
+      eventHours: eventsTable.volunteerHours,
+    })
     .from(registrationsTable)
     .innerJoin(eventsTable, eq(registrationsTable.eventId, eventsTable.id))
     .where(eq(registrationsTable.attendanceStatus, "attended"));
@@ -236,7 +252,7 @@ router.get("/staff/dashboard", requireRole("staff"), async (_req, res): Promise<
       attendanceStatus: registration.attendanceStatus,
       verifiedHours:
         registration.attendanceStatus === "attended"
-          ? Number(event.volunteerHours)
+          ? Number(registration.attendanceHours ?? event.volunteerHours)
           : 0,
     }));
   res.json(
@@ -247,7 +263,7 @@ router.get("/staff/dashboard", requireRole("staff"), async (_req, res): Promise<
       totalRegistrations: registrations.total,
       attendedStudents: attendedCount.total,
       verifiedVolunteerHours: attendedRows.reduce(
-        (total, row) => total + Number(row.eventHours),
+        (total, row) => total + Number(row.attendanceHours ?? row.eventHours),
         0,
       ),
       recentEvents,
@@ -271,10 +287,10 @@ router.get("/staff/students", requireRole("staff"), async (req, res): Promise<vo
         ? and(
             eq(usersTable.role, "student"),
             or(
-              ilike(usersTable.name, `%${search}%`),
-              ilike(usersTable.email, `%${search}%`),
-              ilike(usersTable.studentId, `%${search}%`),
-              ilike(usersTable.department, `%${search}%`),
+              like(usersTable.name, `%${search}%`),
+              like(usersTable.email, `%${search}%`),
+              like(usersTable.studentId, `%${search}%`),
+              like(usersTable.department, `%${search}%`),
             ),
           )
         : eq(usersTable.role, "student"),
@@ -286,6 +302,7 @@ router.get("/staff/students", requireRole("staff"), async (req, res): Promise<vo
       : await db
           .select({
             studentId: registrationsTable.studentId,
+            attendanceHours: registrationsTable.attendanceHours,
             hours: eventsTable.volunteerHours,
           })
           .from(registrationsTable)
@@ -303,7 +320,8 @@ router.get("/staff/students", requireRole("staff"), async (req, res): Promise<vo
   for (const row of attendanceRows) {
     hoursByStudent.set(
       row.studentId,
-      (hoursByStudent.get(row.studentId) ?? 0) + Number(row.hours),
+      (hoursByStudent.get(row.studentId) ?? 0) +
+        Number(row.attendanceHours ?? row.hours),
     );
   }
   res.json(
@@ -330,7 +348,7 @@ router.post(
       res.status(400).json({ error: "Check the event dates and registration deadline." });
       return;
     }
-    const [event] = await db
+    const [created] = await db
       .insert(eventsTable)
       .values({
         ...eventData,
@@ -338,7 +356,14 @@ router.post(
         status: "draft",
         createdBy: req.auth!.id,
       })
-      .returning();
+      .$returningId();
+    const [event] = await db
+      .select()
+      .from(eventsTable)
+      .where(eq(eventsTable.id, created.id))
+      .limit(1);
+    if (!event) throw new Error("Could not retrieve the created event.");
+    await recordStaffAction(req.auth!.id, "event.created", "event", event.id);
     const [dto] = await eventDtos([event]);
     res.status(201).json(CreateEventResponse.parse(dto));
   },
@@ -390,11 +415,20 @@ router.patch(
     if (parsed.data.volunteerHours !== undefined) {
       update.volunteerHours = String(parsed.data.volunteerHours);
     }
-    const [event] = await db
+    await db
       .update(eventsTable)
       .set(update)
+      .where(eq(eventsTable.id, existing.id));
+    const [event] = await db
+      .select()
+      .from(eventsTable)
       .where(eq(eventsTable.id, existing.id))
-      .returning();
+      .limit(1);
+    if (!event) {
+      res.status(404).json({ error: "Event not found." });
+      return;
+    }
+    await recordStaffAction(req.auth!.id, "event.updated", "event", event.id);
     const [dto] = await eventDtos([event]);
     res.json(UpdateEventResponse.parse(dto));
   },
@@ -423,11 +457,20 @@ router.post(
       res.status(409).json({ error: "Update the event dates before publishing." });
       return;
     }
-    const [updated] = await db
+    await db
       .update(eventsTable)
       .set({ status: "published", updatedAt: new Date() })
+      .where(eq(eventsTable.id, event.id));
+    const [updated] = await db
+      .select()
+      .from(eventsTable)
       .where(eq(eventsTable.id, event.id))
-      .returning();
+      .limit(1);
+    if (!updated) {
+      res.status(404).json({ error: "Event not found." });
+      return;
+    }
+    await recordStaffAction(req.auth!.id, "event.published", "event", updated.id);
     const [dto] = await eventDtos([updated]);
     res.json(PublishEventResponse.parse(dto));
   },
@@ -443,15 +486,24 @@ router.post(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const [event] = await db
+    const [updated] = await db
       .update(eventsTable)
       .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(eventsTable.id, params.data.eventId));
+    if (updated.affectedRows !== 1) {
+      res.status(404).json({ error: "Event not found." });
+      return;
+    }
+    const [event] = await db
+      .select()
+      .from(eventsTable)
       .where(eq(eventsTable.id, params.data.eventId))
-      .returning();
+      .limit(1);
     if (!event) {
       res.status(404).json({ error: "Event not found." });
       return;
     }
+    await recordStaffAction(req.auth!.id, "event.cancelled", "event", event.id);
     const [dto] = await eventDtos([event]);
     res.json(CancelEventResponse.parse(dto));
   },
@@ -499,7 +551,7 @@ router.get(
       attendanceStatus: registration.attendanceStatus,
       verifiedHours:
         registration.attendanceStatus === "attended"
-          ? Number(joinedEvent.volunteerHours)
+          ? Number(registration.attendanceHours ?? joinedEvent.volunteerHours)
           : 0,
     }));
     res.json(ListEventRegistrationsResponse.parse(response));
@@ -535,13 +587,34 @@ router.patch(
       res.status(404).json({ error: "Active event registration not found." });
       return;
     }
+    const [event] = await db
+      .select({ volunteerHours: eventsTable.volunteerHours })
+      .from(eventsTable)
+      .where(eq(eventsTable.id, registration.eventId))
+      .limit(1);
+    if (!event) {
+      res.status(404).json({ error: "Event not found." });
+      return;
+    }
     await db
       .update(registrationsTable)
       .set({
         attendanceStatus: parsed.data.status,
+        attendanceHours:
+          parsed.data.status === "attended" ? event.volunteerHours : "0",
+        attendanceMarkedAt: new Date(),
+        attendanceMarkedBy: req.auth!.id,
+        attendanceSource: "manual",
         updatedAt: new Date(),
       })
       .where(eq(registrationsTable.id, registration.id));
+    await recordStaffAction(
+      req.auth!.id,
+      "attendance.recorded",
+      "registration",
+      registration.id,
+      { status: parsed.data.status },
+    );
     const view = await getRegistrationView(registration.eventId, registration.studentId);
     res.json(RecordAttendanceResponse.parse(view));
   },
@@ -580,7 +653,7 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [announcement] = await db
+    const [created] = await db
       .insert(announcementsTable)
       .values({
         title: parsed.data.title.trim(),
@@ -588,7 +661,20 @@ router.post(
         published: true,
         createdBy: req.auth!.id,
       })
-      .returning();
+      .$returningId();
+    const [announcement] = await db
+      .select()
+      .from(announcementsTable)
+      .where(eq(announcementsTable.id, created.id))
+      .limit(1);
+    if (!announcement) throw new Error("Could not retrieve the created announcement.");
+    await recordStaffAction(
+      req.auth!.id,
+      "announcement.created",
+      "announcement",
+      announcement.id,
+      { published: announcement.published },
+    );
     res.status(201).json(
       CreateAnnouncementResponse.parse({
         id: announcement.id,
@@ -623,15 +709,26 @@ router.patch(
     if (parsed.data.title !== undefined) update.title = parsed.data.title.trim();
     if (parsed.data.body !== undefined) update.body = parsed.data.body;
     if (parsed.data.published !== undefined) update.published = parsed.data.published;
-    const [announcement] = await db
+    await db
       .update(announcementsTable)
       .set(update)
+      .where(eq(announcementsTable.id, params.data.announcementId));
+    const [announcement] = await db
+      .select()
+      .from(announcementsTable)
       .where(eq(announcementsTable.id, params.data.announcementId))
-      .returning();
+      .limit(1);
     if (!announcement) {
       res.status(404).json({ error: "Announcement not found." });
       return;
     }
+    await recordStaffAction(
+      req.auth!.id,
+      "announcement.updated",
+      "announcement",
+      announcement.id,
+      { published: announcement.published },
+    );
     res.json(
       UpdateAnnouncementResponse.parse({
         id: announcement.id,
@@ -658,11 +755,16 @@ router.delete(
     const [deleted] = await db
       .delete(announcementsTable)
       .where(eq(announcementsTable.id, params.data.announcementId))
-      .returning({ id: announcementsTable.id });
-    if (!deleted) {
+    if (deleted.affectedRows !== 1) {
       res.status(404).json({ error: "Announcement not found." });
       return;
     }
+    await recordStaffAction(
+      req.auth!.id,
+      "announcement.deleted",
+      "announcement",
+      params.data.announcementId,
+    );
     res.json(DeleteAnnouncementResponse.parse({ ok: true }));
   },
 );
@@ -679,6 +781,7 @@ router.get(
         department: usersTable.department,
         eventTitle: eventsTable.title,
         eventDate: eventsTable.startsAt,
+        attendanceHours: registrationsTable.attendanceHours,
         hours: eventsTable.volunteerHours,
       })
       .from(registrationsTable)
@@ -704,12 +807,19 @@ router.get(
           row.department,
           row.eventTitle,
           row.eventDate.toISOString(),
-          Number(row.hours).toFixed(2),
+          Number(row.attendanceHours ?? row.hours).toFixed(2),
         ]
           .map(csvCell)
           .join(","),
       ),
     ].join("\r\n");
+    await recordStaffAction(
+      _req.auth!.id,
+      "volunteer_hours.exported",
+      "volunteer_hours_report",
+      null,
+      { rows: rows.length },
+    );
     res
       .setHeader("Content-Type", "text/csv; charset=utf-8")
       .attachment("nss-volunteer-hours.csv")

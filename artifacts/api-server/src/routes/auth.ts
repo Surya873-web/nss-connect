@@ -1,4 +1,3 @@
-import { eq, ilike, or } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   ChangeStudentPasswordBody,
@@ -12,11 +11,24 @@ import {
   UpdateStudentProfileBody,
   UpdateStudentProfileResponse,
 } from "@workspace/api-zod";
-import { db, authSessionsTable, usersTable } from "@workspace/db";
+import {
+  db,
+  and,
+  eq,
+  gt,
+  like,
+  lt,
+  or,
+  sql,
+  authLoginAttemptsTable,
+  authSessionsTable,
+  usersTable,
+} from "@workspace/db";
 import { isUniqueViolation } from "../lib/db-errors";
 import {
   clearSession,
   createSession,
+  digestToken,
   hashPassword,
   publicUser,
   requireAuth,
@@ -28,9 +40,69 @@ import {
 import { verifiedHoursForStudent, studentProfileDto } from "../lib/nss-data";
 
 const router: IRouter = Router();
-const attempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_LOGIN_ATTEMPTS = 8;
+const MAX_IP_LOGIN_ATTEMPTS = 30;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+const LOGIN_ATTEMPT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const LOGIN_ATTEMPT_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastLoginAttemptCleanup = 0;
+
+async function loginIsLocked(keyHash: string): Promise<boolean> {
+  const [attempt] = await db
+    .select({ lockedUntil: authLoginAttemptsTable.lockedUntil })
+    .from(authLoginAttemptsTable)
+    .where(
+      and(
+        eq(authLoginAttemptsTable.keyHash, keyHash),
+        gt(authLoginAttemptsTable.lockedUntil, new Date()),
+      ),
+    )
+    .limit(1);
+  return Boolean(attempt);
+}
+
+async function recordLoginFailure(keyHash: string, threshold: number): Promise<void> {
+  const now = new Date();
+  const windowCutoff = new Date(now.getTime() - LOGIN_WINDOW_MS);
+  const lockedUntil = new Date(now.getTime() + LOGIN_LOCKOUT_MS);
+  await db
+    .insert(authLoginAttemptsTable)
+    .values({
+      keyHash,
+      attempts: 1,
+      windowStartedAt: now,
+      lockedUntil: null,
+      updatedAt: now,
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        attempts: sql`CASE WHEN ${authLoginAttemptsTable.windowStartedAt} <= ${windowCutoff} THEN 1 ELSE ${authLoginAttemptsTable.attempts} + 1 END`,
+        windowStartedAt: sql`CASE WHEN ${authLoginAttemptsTable.windowStartedAt} <= ${windowCutoff} THEN ${now} ELSE ${authLoginAttemptsTable.windowStartedAt} END`,
+        lockedUntil: sql`CASE WHEN ${authLoginAttemptsTable.windowStartedAt} <= ${windowCutoff} THEN NULL WHEN ${authLoginAttemptsTable.attempts} + 1 >= ${threshold} THEN ${lockedUntil} ELSE ${authLoginAttemptsTable.lockedUntil} END`,
+        updatedAt: now,
+      },
+    });
+}
+
+async function clearLoginFailures(keyHash: string): Promise<void> {
+  await db
+    .delete(authLoginAttemptsTable)
+    .where(eq(authLoginAttemptsTable.keyHash, keyHash));
+}
+
+async function cleanOldLoginAttempts(now: number): Promise<void> {
+  if (now - lastLoginAttemptCleanup < LOGIN_ATTEMPT_CLEANUP_INTERVAL_MS) return;
+  await db
+    .delete(authLoginAttemptsTable)
+    .where(
+      lt(
+        authLoginAttemptsTable.updatedAt,
+        new Date(now - LOGIN_ATTEMPT_RETENTION_MS),
+      ),
+    );
+  lastLoginAttemptCleanup = now;
+}
 
 router.get("/auth/session", async (req, res): Promise<void> => {
   const user = await resolveSession(req);
@@ -55,10 +127,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const identifier = parsed.data.identifier.trim();
-  const key = `${req.ip ?? "unknown"}:${identifier.toLowerCase()}`;
   const now = Date.now();
-  const existingAttempt = attempts.get(key);
-  if (existingAttempt && existingAttempt.resetAt > now && existingAttempt.count >= MAX_LOGIN_ATTEMPTS) {
+  await cleanOldLoginAttempts(now);
+  const ipKey = digestToken(`login-ip:${req.ip ?? "unknown"}`);
+  if (await loginIsLocked(ipKey)) {
     res.status(429).json({ error: "Too many sign-in attempts. Please wait 15 minutes." });
     return;
   }
@@ -68,28 +140,36 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from(usersTable)
     .where(
       identifier.includes("@")
-        ? ilike(usersTable.email, identifier)
+        ? like(usersTable.email, identifier)
         : or(
-            ilike(usersTable.email, identifier),
+            like(usersTable.email, identifier),
             eq(usersTable.studentId, identifier),
           ),
     )
     .limit(1);
+  const accountKey = digestToken(
+    user
+      ? `login-user:${user.id}`
+      : `login-identifier:${identifier.toLowerCase()}`,
+  );
+  if (await loginIsLocked(accountKey)) {
+    res.status(429).json({ error: "Too many sign-in attempts. Please wait 15 minutes." });
+    return;
+  }
   if (
     !user ||
     (parsed.data.role === "staff" && user.role !== "staff") ||
     (user.role === "staff" && user.email.toLowerCase() !== identifier.toLowerCase()) ||
     !verifyPassword(parsed.data.password, user.passwordHash)
   ) {
-    const count =
-      existingAttempt && existingAttempt.resetAt > now
-        ? existingAttempt.count + 1
-        : 1;
-    attempts.set(key, { count, resetAt: now + LOGIN_WINDOW_MS });
+    await Promise.all([
+      recordLoginFailure(accountKey, MAX_LOGIN_ATTEMPTS),
+      recordLoginFailure(ipKey, MAX_IP_LOGIN_ATTEMPTS),
+    ]);
     res.status(401).json({ error: "The email/student ID or password is incorrect." });
     return;
   }
-  attempts.delete(key);
+  await clearLoginFailures(accountKey);
   const session = await createSession(
     {
       id: user.id,
@@ -119,7 +199,7 @@ router.post("/auth/students", async (req, res): Promise<void> => {
   }
   const data = parsed.data;
   try {
-    const [user] = await db
+    const [created] = await db
       .insert(usersTable)
       .values({
         name: data.name.trim(),
@@ -131,17 +211,17 @@ router.post("/auth/students", async (req, res): Promise<void> => {
         year: data.year,
         phone: data.phone?.trim() || null,
       })
-      .returning();
+      .$returningId();
     const session = await createSession(
       {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        studentId: user.studentId,
+        id: created.id,
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        studentId: data.studentId.trim(),
         role: "student",
-        department: user.department,
-        year: user.year,
-        phone: user.phone,
+        department: data.department.trim(),
+        year: data.year,
+        phone: data.phone?.trim() || null,
       },
       res,
     );
@@ -176,11 +256,19 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [row] = await db
+    await db
       .update(usersTable)
       .set(parsed.data)
+      .where(eq(usersTable.id, req.auth!.id));
+    const [row] = await db
+      .select()
+      .from(usersTable)
       .where(eq(usersTable.id, req.auth!.id))
-      .returning();
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Student profile not found." });
+      return;
+    }
     const hours = await verifiedHoursForStudent(req.auth!.id);
     res.json(UpdateStudentProfileResponse.parse(studentProfileDto(row, hours)));
   },

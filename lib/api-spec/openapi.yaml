@@ -107,7 +107,8 @@ paths:
     post:
       operationId: registerStaff
       tags: [auth]
-      summary: Create a staff account
+      deprecated: true
+      summary: Legacy public staff registration (disabled)
       requestBody:
         required: true
         content:
@@ -115,20 +116,8 @@ paths:
             schema:
               $ref: "#/components/schemas/StaffSignupInput"
       responses:
-        "201":
-          description: Staff account created and signed in
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthSession"
-        "401":
-          description: Authentication required
         "403":
-          description: Staff role required
-        "429":
-          description: Too many staff creation attempts
-        "409":
-          description: Email already exists or staff limit has been reached
+          description: Public staff registration is disabled; authorized staff must create accounts
   /auth/staff/invitation:
     post:
       operationId: validateStaffInvitation
@@ -270,6 +259,153 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AttendanceRecord"
+  /student/attendance/qr:
+    post:
+      operationId: submitQrAttendance
+      tags: [student]
+      summary: Mark the signed-in student's attendance with an event QR token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QrAttendanceInput"
+      responses:
+        "200":
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrAttendanceResult"
+        "403":
+          description: Invalid, expired, or revoked token
+        "409":
+          description: The event is not open or attendance has already been recorded
+  /student/certificates:
+    get:
+      operationId: listStudentCertificates
+      tags: [student]
+      summary: List the current student's volunteer certificates
+      responses:
+        "200":
+          description: Student certificates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VolunteerCertificate"
+    post:
+      operationId: requestVolunteerCertificate
+      tags: [student]
+      summary: Request a certificate for verified participation in an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VolunteerCertificateRequest"
+      responses:
+        "201":
+          description: Certificate request submitted for staff approval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolunteerCertificate"
+        "409":
+          description: Verified attendance is missing or a certificate already exists
+  /student/certificates/{certificateId}/pdf:
+    get:
+      operationId: downloadVolunteerCertificate
+      tags: [student]
+      summary: Download an approved certificate PDF owned by the current student
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      responses:
+        "200":
+          description: Certificate PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Certificate is not approved or is not owned by the current student
+  /staff/certificates:
+    get:
+      operationId: listStaffCertificates
+      tags: [staff]
+      summary: List certificate requests for staff review
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+            default: pending
+      responses:
+        "200":
+          description: Certificate requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffVolunteerCertificate"
+  /staff/certificates/{certificateId}/approve:
+    post:
+      operationId: approveVolunteerCertificate
+      tags: [staff]
+      summary: Approve and issue a certificate
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      responses:
+        "200":
+          description: Certificate approved and issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolunteerCertificate"
+        "404":
+          description: Pending certificate not found
+  /staff/certificates/{certificateId}/reject:
+    post:
+      operationId: rejectVolunteerCertificate
+      tags: [staff]
+      summary: Reject a certificate request with a reason
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectVolunteerCertificateInput"
+      responses:
+        "200":
+          description: Certificate request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VolunteerCertificate"
+        "404":
+          description: Pending certificate not found
+  /public/certificates/{certificateId}:
+    get:
+      operationId: verifyVolunteerCertificate
+      tags: [public]
+      summary: Verify an issued volunteer certificate
+      parameters:
+        - $ref: "#/components/parameters/CertificateId"
+      responses:
+        "200":
+          description: Valid certificate details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificateVerification"
+        "404":
+          description: Certificate not found or not issued
   /student/profile:
     get:
       operationId: getStudentProfile
@@ -510,6 +646,44 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EventRegistration"
+  /staff/events/{eventId}/attendance-qr:
+    post:
+      operationId: createAttendanceQr
+      tags: [staff]
+      summary: Create a short-lived attendance QR token for an event
+      parameters:
+        - $ref: "#/components/parameters/EventId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAttendanceQrInput"
+      responses:
+        "201":
+          description: QR token created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceQrToken"
+  /staff/attendance-qr/{qrId}:
+    delete:
+      operationId: revokeAttendanceQr
+      tags: [staff]
+      summary: Revoke an attendance QR token
+      parameters:
+        - name: qrId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: QR token revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
   /staff/registrations/{registrationId}/attendance:
     patch:
       operationId: recordAttendance
@@ -619,6 +793,18 @@ components:
       required: true
       schema:
         type: integer
+    QrId:
+      name: qrId
+      in: path
+      required: true
+      schema:
+        type: integer
+    CertificateId:
+      name: certificateId
+      in: path
+      required: true
+      schema:
+        type: string
     AnnouncementId:
       name: announcementId
       in: path
@@ -801,8 +987,78 @@ components:
         eventDate: { type: string, format: date-time }
         venue: { type: string }
         status: { type: string, enum: [attended, absent] }
+        attendanceAt: { type: ["string", "null"], format: date-time }
         verifiedHours: { type: number }
-      required: [registrationId, eventId, eventTitle, eventDate, venue, status, verifiedHours]
+      required: [registrationId, eventId, eventTitle, eventDate, venue, status, attendanceAt, verifiedHours]
+    CreateAttendanceQrInput:
+      type: object
+      properties:
+        expiresInSeconds: { type: integer, minimum: 30, maximum: 900 }
+      required: [expiresInSeconds]
+    AttendanceQrToken:
+      type: object
+      properties:
+        id: { type: integer }
+        eventId: { type: integer }
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+      required: [id, eventId, token, expiresAt]
+    QrAttendanceInput:
+      type: object
+      properties:
+        token: { type: string, minLength: 32, maxLength: 64 }
+      required: [token]
+    QrAttendanceResult:
+      type: object
+      properties:
+        registrationId: { type: integer }
+        eventId: { type: integer }
+        attendanceAt: { type: string, format: date-time }
+      required: [registrationId, eventId, attendanceAt]
+    VolunteerCertificateRequest:
+      type: object
+      properties:
+        eventId: { type: integer, minimum: 1 }
+      required: [eventId]
+    RejectVolunteerCertificateInput:
+      type: object
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500 }
+      required: [reason]
+    VolunteerCertificate:
+      type: object
+      properties:
+        id: { type: integer }
+        certificateId: { type: string }
+        eventId: { type: integer }
+        eventTitle: { type: string }
+        volunteerHours: { type: number }
+        status: { type: string, enum: [pending, approved, rejected] }
+        requestedAt: { type: string, format: date-time }
+        issuedAt: { type: ["string", "null"], format: date-time }
+        rejectionReason: { type: ["string", "null"] }
+      required: [id, certificateId, eventId, eventTitle, volunteerHours, status, requestedAt, issuedAt, rejectionReason]
+    StaffVolunteerCertificate:
+      allOf:
+        - $ref: "#/components/schemas/VolunteerCertificate"
+        - type: object
+          properties:
+            studentId: { type: integer }
+            studentName: { type: string }
+            studentCode: { type: string }
+            studentEmail: { type: string }
+          required: [studentId, studentName, studentCode, studentEmail]
+    CertificateVerification:
+      type: object
+      properties:
+        certificateId: { type: string }
+        studentName: { type: string }
+        collegeName: { type: string }
+        unitName: { type: string }
+        eventTitle: { type: string }
+        volunteerHours: { type: number }
+        issuedAt: { type: string, format: date-time }
+      required: [certificateId, studentName, collegeName, unitName, eventTitle, volunteerHours, issuedAt]
     StudentProfile:
       type: object
       properties:

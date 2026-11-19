@@ -1,5 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { db, eventsTable, registrationsTable } from "@workspace/db";
+import { and, db, eq, inArray, eventsTable, registrationsTable } from "@workspace/db";
 
 export function eventDto(
   event: typeof eventsTable.$inferSelect,
@@ -7,7 +6,7 @@ export function eventDto(
   myRegistrationStatus: string | null = null,
 ) {
   const status =
-    event.status === "published" && event.startsAt.getTime() < Date.now()
+    event.status === "published" && event.endsAt.getTime() < Date.now()
       ? "completed"
       : event.status;
   return {
@@ -91,6 +90,7 @@ export function studentProfileDto(
 export async function verifiedHoursForStudent(studentId: number): Promise<number> {
   const rows = await db
     .select({
+      attendanceHours: registrationsTable.attendanceHours,
       hours: eventsTable.volunteerHours,
     })
     .from(registrationsTable)
@@ -101,5 +101,8 @@ export async function verifiedHoursForStudent(studentId: number): Promise<number
         eq(registrationsTable.attendanceStatus, "attended"),
       ),
     );
-  return rows.reduce((total, row) => total + Number(row.hours), 0);
+  return rows.reduce(
+    (total, row) => total + Number(row.attendanceHours ?? row.hours),
+    0,
+  );
 }

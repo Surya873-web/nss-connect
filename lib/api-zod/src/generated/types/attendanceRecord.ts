@@ -14,5 +14,7 @@ export interface AttendanceRecord {
   eventDate: Date;
   venue: string;
   status: AttendanceRecordStatus;
+  /** @nullable */
+  attendanceAt: Date | null;
   verifiedHours: number;
 }

@@ -1,4 +1,3 @@
-import { and, asc, count, desc, eq, gt, inArray, lt } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   GetStudentDashboardResponse,
@@ -9,11 +8,20 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  lt,
   announcementReadsTable,
   announcementsTable,
   eventsTable,
   registrationsTable,
 } from "@workspace/db";
+import { isUniqueViolation } from "../lib/db-errors";
 import { requireCsrf, requireRole } from "../lib/nss-auth";
 import { eventDtos, verifiedHoursForStudent } from "../lib/nss-data";
 
@@ -35,12 +43,13 @@ router.get("/student/dashboard", requireRole("student"), async (req, res): Promi
     .select({
       attendanceStatus: registrationsTable.attendanceStatus,
       startsAt: eventsTable.startsAt,
+      endsAt: eventsTable.endsAt,
     })
     .from(registrationsTable)
     .innerJoin(eventsTable, eq(registrationsTable.eventId, eventsTable.id))
     .where(eq(registrationsTable.studentId, studentId));
   const completedActivities = attendanceRows.filter(
-    (row) => row.attendanceStatus === "attended" && row.startsAt < now,
+    (row) => row.attendanceStatus === "attended" && row.endsAt < now,
   ).length;
   const attendedActivities = attendanceRows.filter(
     (row) => row.attendanceStatus === "attended",
@@ -103,6 +112,8 @@ router.get("/student/attendance", requireRole("student"), async (req, res): Prom
       eventDate: eventsTable.startsAt,
       venue: eventsTable.venue,
       status: registrationsTable.attendanceStatus,
+      attendanceAt: registrationsTable.attendanceMarkedAt,
+      attendanceHours: registrationsTable.attendanceHours,
       volunteerHours: eventsTable.volunteerHours,
     })
     .from(registrationsTable)
@@ -123,8 +134,11 @@ router.get("/student/attendance", requireRole("student"), async (req, res): Prom
         eventDate: row.eventDate.toISOString(),
         venue: row.venue,
         status: row.status,
+        attendanceAt: row.attendanceAt?.toISOString() ?? null,
         verifiedHours:
-          row.status === "attended" ? Number(row.volunteerHours) : 0,
+          row.status === "attended"
+            ? Number(row.attendanceHours ?? row.volunteerHours)
+            : 0,
       })),
     ),
   );
@@ -184,13 +198,26 @@ router.post(
       res.status(404).json({ error: "Announcement not found." });
       return;
     }
-    await db
-      .insert(announcementReadsTable)
-      .values({
-        announcementId: announcement.id,
-        studentId: req.auth!.id,
-      })
-      .onConflictDoNothing();
+    const [existingRead] = await db
+      .select({ announcementId: announcementReadsTable.announcementId })
+      .from(announcementReadsTable)
+      .where(
+        and(
+          eq(announcementReadsTable.announcementId, announcement.id),
+          eq(announcementReadsTable.studentId, req.auth!.id),
+        ),
+      )
+      .limit(1);
+    if (!existingRead) {
+      try {
+        await db.insert(announcementReadsTable).values({
+          announcementId: announcement.id,
+          studentId: req.auth!.id,
+        });
+      } catch (error) {
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
     res.json(MarkAnnouncementReadResponse.parse({ ok: true }));
   },
 );

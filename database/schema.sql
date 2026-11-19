@@ -40,6 +40,30 @@ CREATE TABLE IF NOT EXISTS nss_auth_sessions (
 CREATE INDEX IF NOT EXISTS nss_auth_sessions_user_id_idx
   ON nss_auth_sessions (user_id);
 
+CREATE TABLE IF NOT EXISTS nss_auth_login_attempts (
+  key_hash TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  window_started_at TIMESTAMPTZ NOT NULL,
+  locked_until TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS nss_auth_login_attempts_updated_at_idx
+  ON nss_auth_login_attempts (updated_at);
+
+CREATE TABLE IF NOT EXISTS nss_staff_audit_logs (
+  id SERIAL PRIMARY KEY,
+  actor_id INTEGER REFERENCES nss_users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id INTEGER,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS nss_staff_audit_logs_actor_created_idx
+  ON nss_staff_audit_logs (actor_id, created_at);
+CREATE INDEX IF NOT EXISTS nss_staff_audit_logs_entity_idx
+  ON nss_staff_audit_logs (entity_type, entity_id);
+
 CREATE TABLE IF NOT EXISTS nss_events (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
@@ -64,6 +88,10 @@ CREATE TABLE IF NOT EXISTS nss_registrations (
   registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   status TEXT NOT NULL DEFAULT 'registered',
   attendance_status TEXT,
+  attendance_hours NUMERIC(5, 2),
+  attendance_marked_at TIMESTAMPTZ,
+  attendance_marked_by INTEGER REFERENCES nss_users(id) ON DELETE SET NULL,
+  attendance_source TEXT,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS nss_registrations_event_student_unique
@@ -72,6 +100,44 @@ CREATE INDEX IF NOT EXISTS nss_registrations_student_id_idx
   ON nss_registrations (student_id);
 CREATE INDEX IF NOT EXISTS nss_registrations_event_id_idx
   ON nss_registrations (event_id);
+
+CREATE TABLE IF NOT EXISTS nss_attendance_qr_tokens (
+  id SERIAL PRIMARY KEY,
+  event_id INTEGER NOT NULL REFERENCES nss_events(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_by INTEGER REFERENCES nss_users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS nss_attendance_qr_tokens_event_idx
+  ON nss_attendance_qr_tokens (event_id);
+CREATE INDEX IF NOT EXISTS nss_attendance_qr_tokens_expires_idx
+  ON nss_attendance_qr_tokens (expires_at);
+
+CREATE TABLE IF NOT EXISTS nss_volunteer_certificates (
+  id SERIAL PRIMARY KEY,
+  certificate_id TEXT NOT NULL UNIQUE,
+  registration_id INTEGER NOT NULL UNIQUE
+    REFERENCES nss_registrations(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES nss_users(id) ON DELETE CASCADE,
+  event_id INTEGER NOT NULL REFERENCES nss_events(id) ON DELETE CASCADE,
+  event_title TEXT,
+  volunteer_hours NUMERIC(5, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  rejection_reason TEXT,
+  college_name TEXT,
+  unit_name TEXT,
+  student_name TEXT,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_by INTEGER REFERENCES nss_users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  issued_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS nss_volunteer_certificates_student_idx
+  ON nss_volunteer_certificates (student_id);
+CREATE INDEX IF NOT EXISTS nss_volunteer_certificates_status_idx
+  ON nss_volunteer_certificates (status, requested_at);
 
 CREATE TABLE IF NOT EXISTS nss_announcements (
   id SERIAL PRIMARY KEY,

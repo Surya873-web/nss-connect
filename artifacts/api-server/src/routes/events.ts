@@ -1,13 +1,3 @@
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  ilike,
-  inArray,
-  lt,
-  or,
-} from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CancelEventRegistrationParams,
@@ -21,6 +11,14 @@ import {
 } from "@workspace/api-zod";
 import {
   db,
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  like,
+  lt,
+  or,
   eventsTable,
   registrationsTable,
   usersTable,
@@ -46,14 +44,14 @@ router.get("/events", attachOptionalSession, async (req, res): Promise<void> => 
   if (query.data.status === "upcoming") {
     filters.push(and(eq(eventsTable.status, "published"), gt(eventsTable.startsAt, now))!);
   } else if (query.data.status === "completed") {
-    filters.push(and(eq(eventsTable.status, "published"), lt(eventsTable.startsAt, now))!);
+    filters.push(and(eq(eventsTable.status, "published"), lt(eventsTable.endsAt, now))!);
   }
   if (query.data.search?.trim()) {
     filters.push(
       or(
-        ilike(eventsTable.title, `%${query.data.search.trim()}%`),
-        ilike(eventsTable.description, `%${query.data.search.trim()}%`),
-        ilike(eventsTable.venue, `%${query.data.search.trim()}%`),
+        like(eventsTable.title, `%${query.data.search.trim()}%`),
+        like(eventsTable.description, `%${query.data.search.trim()}%`),
+        like(eventsTable.venue, `%${query.data.search.trim()}%`),
       )!,
     );
   }
@@ -140,6 +138,10 @@ router.post(
           .set({
             status: "registered",
             attendanceStatus: null,
+            attendanceHours: null,
+            attendanceMarkedAt: null,
+            attendanceMarkedBy: null,
+            attendanceSource: null,
             registeredAt: new Date(),
             updatedAt: new Date(),
           })
@@ -234,7 +236,7 @@ export async function getRegistrationView(eventId: number, studentId: number) {
     attendanceStatus: row.registration.attendanceStatus,
     verifiedHours:
       row.registration.attendanceStatus === "attended"
-        ? Number(row.event.volunteerHours)
+        ? Number(row.registration.attendanceHours ?? row.event.volunteerHours)
         : 0,
   };
 }

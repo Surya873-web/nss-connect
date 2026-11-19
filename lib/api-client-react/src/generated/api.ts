@@ -25,8 +25,11 @@ import type {
   AnnouncementInput,
   AnnouncementUpdate,
   AttendanceInput,
+  AttendanceQrToken,
   AttendanceRecord,
   AuthSession,
+  CertificateVerification,
+  CreateAttendanceQrInput,
   CreateStaffAccountInput,
   Event,
   EventInput,
@@ -34,10 +37,14 @@ import type {
   EventUpdate,
   HealthStatus,
   ListEventsParams,
+  ListStaffCertificatesParams,
   ListStudentsParams,
   LoginInput,
   PasswordChangeInput,
   PublicOverview,
+  QrAttendanceInput,
+  QrAttendanceResult,
+  RejectVolunteerCertificateInput,
   StaffAccount,
   StaffAccountDeleteResult,
   StaffAccountDirectory,
@@ -45,10 +52,13 @@ import type {
   StaffInvitationInput,
   StaffPasswordResetInput,
   StaffSignupInput,
+  StaffVolunteerCertificate,
   StudentDashboard,
   StudentProfile,
   StudentProfileUpdate,
-  StudentSignupInput
+  StudentSignupInput,
+  VolunteerCertificate,
+  VolunteerCertificateRequest
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -568,9 +578,10 @@ export const getRegisterStaffUrl = () => {
 }
 
 /**
- * @summary Create a staff account
+ * @deprecated
+ * @summary Legacy public staff registration (disabled)
  */
-export const registerStaff = async (staffSignupInput: StaffSignupInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthSession> => {
+export const registerStaff = async (staffSignupInput: StaffSignupInput, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -586,7 +597,7 @@ export const registerStaff = async (staffSignupInput: StaffSignupInput, options?
     }
     return headers;
   };
-return customFetch<AuthSession>(getRegisterStaffUrl(),
+return customFetch<unknown>(getRegisterStaffUrl(),
   {
     ...options,
     method: 'POST',
@@ -634,7 +645,8 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RegisterStaffMutationVariables = {data: BodyType<StaffSignupInput>}
 
     /**
- * @summary Create a staff account
+ * @deprecated
+ * @summary Legacy public staff registration (disabled)
  */
 export const useRegisterStaff = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerStaff>>, TError,RegisterStaffMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1274,6 +1286,660 @@ export function useListStudentAttendance<TData = Awaited<ReturnType<typeof listS
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListStudentAttendanceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitQrAttendanceUrl = () => {
+
+
+
+
+  return `/api/student/attendance/qr`
+}
+
+/**
+ * @summary Mark the signed-in student's attendance with an event QR token
+ */
+export const submitQrAttendance = async (qrAttendanceInput: QrAttendanceInput, options?: Parameters<typeof customFetch>[1]): Promise<QrAttendanceResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<QrAttendanceResult>(getSubmitQrAttendanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(qrAttendanceInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitQrAttendanceMutationKey = () => ['submitQrAttendance'] as const;
+
+export const getSubmitQrAttendanceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitQrAttendance>>, TError,SubmitQrAttendanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitQrAttendance>>, TError,SubmitQrAttendanceMutationVariables, TContext> => {
+
+const mutationKey = getSubmitQrAttendanceMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitQrAttendance>>, SubmitQrAttendanceMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitQrAttendance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitQrAttendanceMutationResult = NonNullable<Awaited<ReturnType<typeof submitQrAttendance>>>
+    export type SubmitQrAttendanceMutationBody = BodyType<QrAttendanceInput>
+    export type SubmitQrAttendanceMutationError = ErrorType<void>
+    export type SubmitQrAttendanceMutationVariables = {data: BodyType<QrAttendanceInput>}
+
+    /**
+ * @summary Mark the signed-in student's attendance with an event QR token
+ */
+export const useSubmitQrAttendance = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitQrAttendance>>, TError,SubmitQrAttendanceMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitQrAttendance>>,
+        TError,
+        SubmitQrAttendanceMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitQrAttendanceMutationOptions(options));
+    }
+
+export const getListStudentCertificatesUrl = () => {
+
+
+
+
+  return `/api/student/certificates`
+}
+
+/**
+ * @summary List the current student's volunteer certificates
+ */
+export const listStudentCertificates = async ( options?: Parameters<typeof customFetch>[1]): Promise<VolunteerCertificate[]> => {
+
+  return customFetch<VolunteerCertificate[]>(getListStudentCertificatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStudentCertificatesQueryKey = () => {
+    return [
+    `/api/student/certificates`
+    ] as const;
+    }
+
+
+export const getListStudentCertificatesQueryOptions = <TData = Awaited<ReturnType<typeof listStudentCertificates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStudentCertificates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStudentCertificatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStudentCertificates>>> = ({ signal }) => listStudentCertificates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStudentCertificates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStudentCertificatesQueryResult = NonNullable<Awaited<ReturnType<typeof listStudentCertificates>>>
+export type ListStudentCertificatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the current student's volunteer certificates
+ */
+
+export function useListStudentCertificates<TData = Awaited<ReturnType<typeof listStudentCertificates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStudentCertificates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStudentCertificatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestVolunteerCertificateUrl = () => {
+
+
+
+
+  return `/api/student/certificates`
+}
+
+/**
+ * @summary Request a certificate for verified participation in an event
+ */
+export const requestVolunteerCertificate = async (volunteerCertificateRequest: VolunteerCertificateRequest, options?: Parameters<typeof customFetch>[1]): Promise<VolunteerCertificate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<VolunteerCertificate>(getRequestVolunteerCertificateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(volunteerCertificateRequest)
+  }
+);}
+
+
+
+
+
+export const getRequestVolunteerCertificateMutationKey = () => ['requestVolunteerCertificate'] as const;
+
+export const getRequestVolunteerCertificateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestVolunteerCertificate>>, TError,RequestVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestVolunteerCertificate>>, TError,RequestVolunteerCertificateMutationVariables, TContext> => {
+
+const mutationKey = getRequestVolunteerCertificateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestVolunteerCertificate>>, RequestVolunteerCertificateMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestVolunteerCertificate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestVolunteerCertificateMutationResult = NonNullable<Awaited<ReturnType<typeof requestVolunteerCertificate>>>
+    export type RequestVolunteerCertificateMutationBody = BodyType<VolunteerCertificateRequest>
+    export type RequestVolunteerCertificateMutationError = ErrorType<void>
+    export type RequestVolunteerCertificateMutationVariables = {data: BodyType<VolunteerCertificateRequest>}
+
+    /**
+ * @summary Request a certificate for verified participation in an event
+ */
+export const useRequestVolunteerCertificate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestVolunteerCertificate>>, TError,RequestVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestVolunteerCertificate>>,
+        TError,
+        RequestVolunteerCertificateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestVolunteerCertificateMutationOptions(options));
+    }
+
+export const getDownloadVolunteerCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/student/certificates/${certificateId}/pdf`
+}
+
+/**
+ * @summary Download an approved certificate PDF owned by the current student
+ */
+export const downloadVolunteerCertificate = async (certificateId: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadVolunteerCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadVolunteerCertificateQueryKey = (certificateId: string,) => {
+    return [
+    `/api/student/certificates/${certificateId}/pdf`
+    ] as const;
+    }
+
+
+export const getDownloadVolunteerCertificateQueryOptions = <TData = Awaited<ReturnType<typeof downloadVolunteerCertificate>>, TError = ErrorType<void>>(certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVolunteerCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadVolunteerCertificateQueryKey(certificateId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadVolunteerCertificate>>> = ({ signal }) => downloadVolunteerCertificate(certificateId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: certificateId !== null && certificateId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadVolunteerCertificate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadVolunteerCertificateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadVolunteerCertificate>>>
+export type DownloadVolunteerCertificateQueryError = ErrorType<void>
+
+
+/**
+ * @summary Download an approved certificate PDF owned by the current student
+ */
+
+export function useDownloadVolunteerCertificate<TData = Awaited<ReturnType<typeof downloadVolunteerCertificate>>, TError = ErrorType<void>>(
+ certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVolunteerCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadVolunteerCertificateQueryOptions(certificateId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListStaffCertificatesUrl = (params?: ListStaffCertificatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/staff/certificates?${stringifiedParams}` : `/api/staff/certificates`
+}
+
+/**
+ * @summary List certificate requests for staff review
+ */
+export const listStaffCertificates = async (params?: ListStaffCertificatesParams, options?: Parameters<typeof customFetch>[1]): Promise<StaffVolunteerCertificate[]> => {
+
+  return customFetch<StaffVolunteerCertificate[]>(getListStaffCertificatesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStaffCertificatesQueryKey = (params?: ListStaffCertificatesParams,) => {
+    return [
+    `/api/staff/certificates`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListStaffCertificatesQueryOptions = <TData = Awaited<ReturnType<typeof listStaffCertificates>>, TError = ErrorType<unknown>>(params?: ListStaffCertificatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffCertificates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStaffCertificatesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffCertificates>>> = ({ signal }) => listStaffCertificates(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStaffCertificates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStaffCertificatesQueryResult = NonNullable<Awaited<ReturnType<typeof listStaffCertificates>>>
+export type ListStaffCertificatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List certificate requests for staff review
+ */
+
+export function useListStaffCertificates<TData = Awaited<ReturnType<typeof listStaffCertificates>>, TError = ErrorType<unknown>>(
+ params?: ListStaffCertificatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffCertificates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStaffCertificatesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getApproveVolunteerCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/staff/certificates/${certificateId}/approve`
+}
+
+/**
+ * @summary Approve and issue a certificate
+ */
+export const approveVolunteerCertificate = async (certificateId: string, options?: Parameters<typeof customFetch>[1]): Promise<VolunteerCertificate> => {
+
+  return customFetch<VolunteerCertificate>(getApproveVolunteerCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveVolunteerCertificateMutationKey = () => ['approveVolunteerCertificate'] as const;
+
+export const getApproveVolunteerCertificateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveVolunteerCertificate>>, TError,ApproveVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveVolunteerCertificate>>, TError,ApproveVolunteerCertificateMutationVariables, TContext> => {
+
+const mutationKey = getApproveVolunteerCertificateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveVolunteerCertificate>>, ApproveVolunteerCertificateMutationVariables> = (props) => {
+          const {certificateId} = props ?? {};
+
+          return  approveVolunteerCertificate(certificateId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveVolunteerCertificateMutationResult = NonNullable<Awaited<ReturnType<typeof approveVolunteerCertificate>>>
+
+    export type ApproveVolunteerCertificateMutationError = ErrorType<void>
+    export type ApproveVolunteerCertificateMutationVariables = {certificateId: string}
+
+    /**
+ * @summary Approve and issue a certificate
+ */
+export const useApproveVolunteerCertificate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveVolunteerCertificate>>, TError,ApproveVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveVolunteerCertificate>>,
+        TError,
+        ApproveVolunteerCertificateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApproveVolunteerCertificateMutationOptions(options));
+    }
+
+export const getRejectVolunteerCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/staff/certificates/${certificateId}/reject`
+}
+
+/**
+ * @summary Reject a certificate request with a reason
+ */
+export const rejectVolunteerCertificate = async (certificateId: string,
+    rejectVolunteerCertificateInput: RejectVolunteerCertificateInput, options?: Parameters<typeof customFetch>[1]): Promise<VolunteerCertificate> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<VolunteerCertificate>(getRejectVolunteerCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(rejectVolunteerCertificateInput)
+  }
+);}
+
+
+
+
+
+export const getRejectVolunteerCertificateMutationKey = () => ['rejectVolunteerCertificate'] as const;
+
+export const getRejectVolunteerCertificateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectVolunteerCertificate>>, TError,RejectVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectVolunteerCertificate>>, TError,RejectVolunteerCertificateMutationVariables, TContext> => {
+
+const mutationKey = getRejectVolunteerCertificateMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectVolunteerCertificate>>, RejectVolunteerCertificateMutationVariables> = (props) => {
+          const {certificateId,data} = props ?? {};
+
+          return  rejectVolunteerCertificate(certificateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectVolunteerCertificateMutationResult = NonNullable<Awaited<ReturnType<typeof rejectVolunteerCertificate>>>
+    export type RejectVolunteerCertificateMutationBody = BodyType<RejectVolunteerCertificateInput>
+    export type RejectVolunteerCertificateMutationError = ErrorType<void>
+    export type RejectVolunteerCertificateMutationVariables = {certificateId: string;data: BodyType<RejectVolunteerCertificateInput>}
+
+    /**
+ * @summary Reject a certificate request with a reason
+ */
+export const useRejectVolunteerCertificate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectVolunteerCertificate>>, TError,RejectVolunteerCertificateMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectVolunteerCertificate>>,
+        TError,
+        RejectVolunteerCertificateMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRejectVolunteerCertificateMutationOptions(options));
+    }
+
+export const getVerifyVolunteerCertificateUrl = (certificateId: string,) => {
+
+
+
+
+  return `/api/public/certificates/${certificateId}`
+}
+
+/**
+ * @summary Verify an issued volunteer certificate
+ */
+export const verifyVolunteerCertificate = async (certificateId: string, options?: Parameters<typeof customFetch>[1]): Promise<CertificateVerification> => {
+
+  return customFetch<CertificateVerification>(getVerifyVolunteerCertificateUrl(certificateId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getVerifyVolunteerCertificateQueryKey = (certificateId: string,) => {
+    return [
+    `/api/public/certificates/${certificateId}`
+    ] as const;
+    }
+
+
+export const getVerifyVolunteerCertificateQueryOptions = <TData = Awaited<ReturnType<typeof verifyVolunteerCertificate>>, TError = ErrorType<void>>(certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof verifyVolunteerCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getVerifyVolunteerCertificateQueryKey(certificateId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof verifyVolunteerCertificate>>> = ({ signal }) => verifyVolunteerCertificate(certificateId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: certificateId !== null && certificateId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof verifyVolunteerCertificate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type VerifyVolunteerCertificateQueryResult = NonNullable<Awaited<ReturnType<typeof verifyVolunteerCertificate>>>
+export type VerifyVolunteerCertificateQueryError = ErrorType<void>
+
+
+/**
+ * @summary Verify an issued volunteer certificate
+ */
+
+export function useVerifyVolunteerCertificate<TData = Awaited<ReturnType<typeof verifyVolunteerCertificate>>, TError = ErrorType<void>>(
+ certificateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof verifyVolunteerCertificate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getVerifyVolunteerCertificateQueryOptions(certificateId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -2491,6 +3157,169 @@ export function useListEventRegistrations<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getCreateAttendanceQrUrl = (eventId: number,) => {
+
+
+
+
+  return `/api/staff/events/${eventId}/attendance-qr`
+}
+
+/**
+ * @summary Create a short-lived attendance QR token for an event
+ */
+export const createAttendanceQr = async (eventId: number,
+    createAttendanceQrInput: CreateAttendanceQrInput, options?: Parameters<typeof customFetch>[1]): Promise<AttendanceQrToken> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AttendanceQrToken>(getCreateAttendanceQrUrl(eventId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createAttendanceQrInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAttendanceQrMutationKey = () => ['createAttendanceQr'] as const;
+
+export const getCreateAttendanceQrMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendanceQr>>, TError,CreateAttendanceQrMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAttendanceQr>>, TError,CreateAttendanceQrMutationVariables, TContext> => {
+
+const mutationKey = getCreateAttendanceQrMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAttendanceQr>>, CreateAttendanceQrMutationVariables> = (props) => {
+          const {eventId,data} = props ?? {};
+
+          return  createAttendanceQr(eventId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAttendanceQrMutationResult = NonNullable<Awaited<ReturnType<typeof createAttendanceQr>>>
+    export type CreateAttendanceQrMutationBody = BodyType<CreateAttendanceQrInput>
+    export type CreateAttendanceQrMutationError = ErrorType<unknown>
+    export type CreateAttendanceQrMutationVariables = {eventId: number;data: BodyType<CreateAttendanceQrInput>}
+
+    /**
+ * @summary Create a short-lived attendance QR token for an event
+ */
+export const useCreateAttendanceQr = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttendanceQr>>, TError,CreateAttendanceQrMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAttendanceQr>>,
+        TError,
+        CreateAttendanceQrMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAttendanceQrMutationOptions(options));
+    }
+
+export const getRevokeAttendanceQrUrl = (qrId: number,) => {
+
+
+
+
+  return `/api/staff/attendance-qr/${qrId}`
+}
+
+/**
+ * @summary Revoke an attendance QR token
+ */
+export const revokeAttendanceQr = async (qrId: number, options?: Parameters<typeof customFetch>[1]): Promise<ActionResult> => {
+
+  return customFetch<ActionResult>(getRevokeAttendanceQrUrl(qrId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeAttendanceQrMutationKey = () => ['revokeAttendanceQr'] as const;
+
+export const getRevokeAttendanceQrMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceQr>>, TError,RevokeAttendanceQrMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceQr>>, TError,RevokeAttendanceQrMutationVariables, TContext> => {
+
+const mutationKey = getRevokeAttendanceQrMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeAttendanceQr>>, RevokeAttendanceQrMutationVariables> = (props) => {
+          const {qrId} = props ?? {};
+
+          return  revokeAttendanceQr(qrId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeAttendanceQrMutationResult = NonNullable<Awaited<ReturnType<typeof revokeAttendanceQr>>>
+
+    export type RevokeAttendanceQrMutationError = ErrorType<unknown>
+    export type RevokeAttendanceQrMutationVariables = {qrId: number}
+
+    /**
+ * @summary Revoke an attendance QR token
+ */
+export const useRevokeAttendanceQr = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAttendanceQr>>, TError,RevokeAttendanceQrMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeAttendanceQr>>,
+        TError,
+        RevokeAttendanceQrMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevokeAttendanceQrMutationOptions(options));
+    }
 
 export const getRecordAttendanceUrl = (registrationId: number,) => {
 

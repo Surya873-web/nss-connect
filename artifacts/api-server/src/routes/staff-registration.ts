@@ -1,22 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
-import { and, count, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
-  RegisterStaffBody,
-  RegisterStaffResponse,
   ResetStaffPasswordBody,
   ValidateStaffInvitationBody,
 } from "@workspace/api-zod";
-import { authSessionsTable, db, usersTable } from "@workspace/db";
-import { isUniqueViolation } from "../lib/db-errors";
-import { createSession, digestToken, hashPassword } from "../lib/nss-auth";
+import { and, authSessionsTable, db, eq, usersTable } from "@workspace/db";
+import { digestToken, hashPassword } from "../lib/nss-auth";
 
 const router: IRouter = Router();
 const STAFF_REGISTRATION_EMAIL = "suryasaravanan542@gmail.com";
 const INVITATION_PASSWORD_MIN_LENGTH = 15;
 const MAX_SIGNUP_ATTEMPTS = 5;
 const SIGNUP_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
-const STAFF_ACCOUNT_LIMIT = 100;
 const signupAttempts = new Map<string, { count: number; resetAt: number }>();
 
 router.post("/auth/staff/invitation", async (req, res): Promise<void> => {
@@ -80,66 +75,11 @@ router.post("/auth/staff/password", async (req, res): Promise<void> => {
   res.status(204).end();
 });
 
-router.post(
-  "/auth/staff",
-  async (req, res): Promise<void> => {
-    const parsed = RegisterStaffBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.message });
-      return;
-    }
-    if (parsed.data.password !== parsed.data.confirmPassword) {
-      res.status(400).json({ error: "Password and Confirm Password must match." });
-      return;
-    }
-
-    try {
-      const user = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(3942026001)`);
-        const [countRow] = await tx
-          .select({ total: count() })
-          .from(usersTable)
-          .where(eq(usersTable.role, "staff"));
-        if (countRow.total >= STAFF_ACCOUNT_LIMIT) return null;
-        const [created] = await tx
-          .insert(usersTable)
-          .values({
-            name: parsed.data.name.trim(),
-            email: parsed.data.email.trim().toLowerCase(),
-            studentId: null,
-            role: "staff",
-            passwordHash: hashPassword(parsed.data.password),
-          })
-          .returning();
-        return created;
-      });
-      if (!user) {
-        res.status(409).json({ error: "Maximum staff limit reached." });
-        return;
-      }
-      const session = await createSession(
-        {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          studentId: user.studentId,
-          role: "staff",
-          department: user.department,
-          year: user.year,
-          phone: user.phone,
-        },
-        res,
-      );
-      res.status(201).json(RegisterStaffResponse.parse(session));
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        res.status(409).json({ error: "A staff account already uses that email address." });
-        return;
-      }
-      throw error;
-    }
-  },
-);
+router.post("/auth/staff", (_req, res): void => {
+  res.status(403).json({
+    error: "Staff accounts must be created by an authorized staff member.",
+  });
+});
 
 function validateInvitationPassword(
   suppliedPassword: string,

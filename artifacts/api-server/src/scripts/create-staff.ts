@@ -1,8 +1,9 @@
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { count, eq } from "drizzle-orm";
 import {
   db,
+  count,
+  eq,
   announcementsTable,
   eventsTable,
   usersTable,

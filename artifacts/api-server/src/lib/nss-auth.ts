@@ -4,9 +4,8 @@ import {
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
-import { db, authSessionsTable, usersTable } from "@workspace/db";
+import { and, db, eq, gt, authSessionsTable, usersTable } from "@workspace/db";
 
 export type SessionUser = {
   id: number;

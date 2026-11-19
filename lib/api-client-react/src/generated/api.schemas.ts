@@ -305,7 +305,91 @@ export interface AttendanceRecord {
   eventDate: string;
   venue: string;
   status: AttendanceRecordStatus;
+  /** @nullable */
+  attendanceAt: string | null;
   verifiedHours: number;
+}
+
+export interface CreateAttendanceQrInput {
+  /**
+     * @minimum 30
+     * @maximum 900
+     */
+  expiresInSeconds: number;
+}
+
+export interface AttendanceQrToken {
+  id: number;
+  eventId: number;
+  token: string;
+  expiresAt: string;
+}
+
+export interface QrAttendanceInput {
+  /**
+     * @minLength 32
+     * @maxLength 64
+     */
+  token: string;
+}
+
+export interface QrAttendanceResult {
+  registrationId: number;
+  eventId: number;
+  attendanceAt: string;
+}
+
+export interface VolunteerCertificateRequest {
+  /** @minimum 1 */
+  eventId: number;
+}
+
+export interface RejectVolunteerCertificateInput {
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+}
+
+export type VolunteerCertificateStatus = typeof VolunteerCertificateStatus[keyof typeof VolunteerCertificateStatus];
+
+
+export const VolunteerCertificateStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface VolunteerCertificate {
+  id: number;
+  certificateId: string;
+  eventId: number;
+  eventTitle: string;
+  volunteerHours: number;
+  status: VolunteerCertificateStatus;
+  requestedAt: string;
+  /** @nullable */
+  issuedAt: string | null;
+  /** @nullable */
+  rejectionReason: string | null;
+}
+
+export type StaffVolunteerCertificate = VolunteerCertificate & {
+  studentId: number;
+  studentName: string;
+  studentCode: string;
+  studentEmail: string;
+};
+
+export interface CertificateVerification {
+  certificateId: string;
+  studentName: string;
+  collegeName: string;
+  unitName: string;
+  eventTitle: string;
+  volunteerHours: number;
+  issuedAt: string;
 }
 
 export type StudentProfileRole = typeof StudentProfileRole[keyof typeof StudentProfileRole];
@@ -404,6 +488,19 @@ export const ListEventsStatus = {
   upcoming: 'upcoming',
   completed: 'completed',
   all: 'all',
+} as const;
+
+export type ListStaffCertificatesParams = {
+status?: ListStaffCertificatesStatus;
+};
+
+export type ListStaffCertificatesStatus = typeof ListStaffCertificatesStatus[keyof typeof ListStaffCertificatesStatus];
+
+
+export const ListStaffCertificatesStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 
 export type ListStudentsParams = {

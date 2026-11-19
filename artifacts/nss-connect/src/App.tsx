@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { Link, Route, Switch, useLocation } from 'wouter';
 import {
   Activity, ArrowDownToLine, ArrowRight, Bell, BookOpenCheck, CalendarDays, Check,
   ChevronRight, CircleAlert, ClipboardCheck, Clock3, Compass, FileText, HeartHandshake,
-  Home, LogOut, Plus, Search, ShieldCheck, Sparkles, Users, X,
+  Home, LogOut, Plus, QrCode, Search, ShieldCheck, Sparkles, Users, X,
 } from 'lucide-react';
+import { BrowserQRCodeReader } from '@zxing/browser';
+import QRCode from 'qrcode';
 import {
   getGetEventQueryKey, getGetStaffDashboardQueryKey, getGetSessionQueryKey, getGetStudentDashboardQueryKey,
   getListStaffAccountsQueryKey,
@@ -18,11 +20,15 @@ import {
   useGetStudentProfile, useHealthCheck, useListAnnouncements, useListEvents, useListEventRegistrations,
   useListManageAnnouncements, useListStudentAttendance, useListStudents, useLogin, useLogout,
   useListStaffAccounts, useCreateStaffAccount, useDeleteStaffAccount,
-  useRegisterStaff, useResetStaffPassword,
+  useResetStaffPassword,
   useMarkAnnouncementRead, usePublishEvent, useRecordAttendance, useRegisterForEvent,
   useRegisterStudent, useUpdateAnnouncement, useUpdateEvent, useUpdateStudentProfile,
+  useCreateAttendanceQr, useRevokeAttendanceQr, useSubmitQrAttendance,
+  useApproveVolunteerCertificate, useListStaffCertificates, useListStudentCertificates,
+  useRejectVolunteerCertificate, useRequestVolunteerCertificate, useVerifyVolunteerCertificate,
+  downloadVolunteerCertificate, getVerifyVolunteerCertificateQueryKey,
 } from '@workspace/api-client-react';
-import type { Announcement, AttendanceRecord, Event, EventInput, EventRegistration, StaffAccount, StudentProfile } from '@workspace/api-client-react';
+import type { Announcement, AttendanceQrToken, AttendanceRecord, Event, EventInput, EventRegistration, StaffAccount, StaffVolunteerCertificate, StudentProfile, VolunteerCertificate } from '@workspace/api-client-react';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 const invalid = (...keys: readonly (readonly unknown[])[]) => keys.forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
@@ -60,12 +66,12 @@ function Pill({children,tone='blue'}:{children:React.ReactNode;tone?:'blue'|'gre
 
 const studentNav = [
   {href:'/student',label:'Overview',icon:Home},{href:'/student/events',label:'Find activities',icon:Compass},
-  {href:'/student/attendance',label:'My service record',icon:ClipboardCheck},{href:'/student/announcements',label:'Notices',icon:Bell},
+  {href:'/student/attendance',label:'My service record',icon:ClipboardCheck},{href:'/student/certificates',label:'Certificates',icon:FileText},{href:'/student/announcements',label:'Notices',icon:Bell},
   {href:'/student/profile',label:'My profile',icon:Users},
 ];
 const staffNav = [
   {href:'/staff/dashboard',label:'Staff dashboard',icon:Home},{href:'/staff/programs',label:'NSS programs',icon:CalendarDays},
-  {href:'/staff/students',label:'Students',icon:Users},{href:'/staff/accounts',label:'Staff accounts',icon:ShieldCheck},{href:'/staff/notices',label:'Notices',icon:Bell},
+  {href:'/staff/students',label:'Students',icon:Users},{href:'/staff/accounts',label:'Staff accounts',icon:ShieldCheck},{href:'/staff/certificates',label:'Certificates',icon:FileText},{href:'/staff/notices',label:'Notices',icon:Bell},
 ];
 function Shell({children,role}:{children:ReactNode;role:'student'|'staff'}) {
   const [loc,setLoc]=useLocation(); const [mobile,setMobile]=useState(false);
@@ -91,7 +97,7 @@ function Shell({children,role}:{children:ReactNode;role:'student'|'staff'}) {
     </div>
     <style>{`@media(max-width:767px){.desktop-only{display:none!important}.mobile-brand{display:block!important}main{padding-bottom:92px!important}.mobile-dock{display:flex!important}}`}</style>
     <nav className="mobile-dock" style={{display:'none',position:'fixed',bottom:0,left:0,right:0,zIndex:15,justifyContent:'space-around',padding:'9px 5px calc(9px + env(safe-area-inset-bottom))',background:'hsl(var(--card)/.96)',borderTop:'1px solid hsl(var(--border))',backdropFilter:'blur(16px)'}}>
-      {nav.slice(0,4).map(item=><Link key={item.href} href={item.href} style={{display:'grid',justifyItems:'center',gap:3,fontSize:10,fontWeight:700,color:loc===item.href?'hsl(var(--primary))':'hsl(var(--muted-foreground))'}}><item.icon size={19}/>{item.label.split(' ')[0]}</Link>)}
+      {nav.map(item=><Link key={item.href} href={item.href} style={{flex:'1 1 0',minWidth:0,display:'grid',justifyItems:'center',gap:3,fontSize:10,fontWeight:700,color:loc===item.href?'hsl(var(--primary))':'hsl(var(--muted-foreground))'}}><item.icon size={19}/><span style={{maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label.split(' ')[0]}</span></Link>)}
     </nav>
   </div>;
 }
@@ -174,49 +180,11 @@ function Login({staff=false}:{staff?:boolean}){
   </div></AuthLayout>;
 }
 function StaffSignup(){
-  const signup=useRegisterStaff();
-  const [,setLoc]=useLocation();
-  const [error,setError]=useState('');
-  const [success,setSuccess]=useState('');
-  const submit=(e:FormEvent<HTMLFormElement>)=>{
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    const d=new FormData(e.currentTarget);
-    const password=String(d.get('password'));
-    const confirmPassword=String(d.get('confirmPassword'));
-    if(password!==confirmPassword){
-      setError('Password and Confirm Password must match.');
-      return;
-    }
-    signup.mutate({data:{
-      name:String(d.get('name')).trim(),
-      email:String(d.get('email')).trim(),
-      password,
-      confirmPassword,
-    }},{onSuccess:s=>{
-      queryClient.setQueryData(getGetSessionQueryKey(),s);
-      invalid(getGetSessionQueryKey());
-      setSuccess('Staff account created successfully.');
-      setLoc('/staff/dashboard');
-    },onError:e=>{
-      setError(e.status===409?'A staff account already uses that email address or the maximum staff limit has been reached.':msgError(e));
-    }});
-  };
-  return <AuthLayout caption="Create an authorized NSS staff account with a unique staff email and password."><div style={{width:'min(100%,390px)',maxHeight:'94dvh',overflowY:'auto',padding:'8px 4px'}}>
+  return <AuthLayout caption="NSS staff accounts are managed by authorized members of your NSS team."><div style={{width:'min(100%,390px)',padding:'8px 4px'}}>
     <div className="eyebrow">NSS staff portal</div>
-    <h2 style={{fontFamily:'var(--app-font-serif)',fontSize:32,letterSpacing:'-.05em',margin:'8px 0 7px'}}>Create staff account</h2>
-    <p style={{margin:'0 0 20px',color:'hsl(var(--muted-foreground))',fontSize:14,lineHeight:1.6}}>Enter the staff member's details below.</p>
-    <form onSubmit={submit} style={{display:'grid',gap:14}}>
-      <label className="field">Staff Full Name<input className="input" name="name" required minLength={2} maxLength={120} autoComplete="name" data-testid="input-staff-signup-name"/></label>
-      <label className="field">Staff Email Address<input className="input" type="email" name="email" required autoComplete="email" data-testid="input-staff-signup-email"/></label>
-      <label className="field">Password<input className="input" type="password" name="password" required minLength={12} maxLength={128} autoComplete="new-password" data-testid="input-staff-signup-password"/></label>
-      <label className="field">Confirm Password<input className="input" type="password" name="confirmPassword" required minLength={12} maxLength={128} autoComplete="new-password" data-testid="input-staff-signup-confirm-password"/></label>
-      {error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13}}>{error}</div>}
-      {success&&<div role="status" style={{color:'hsl(155 48% 29%)',fontSize:13}}>{success}</div>}
-      <button className="btn" disabled={signup.isPending} data-testid="button-staff-signup">{signup.isPending?'Creating account…':'Create Staff'} <ArrowRight size={16}/></button>
-    </form>
-    <p style={{textAlign:'center',fontSize:13,color:'hsl(var(--muted-foreground))',marginTop:22}}>Already have a staff account? <Link className="link" href="/staff/login">Staff sign in</Link></p>
+    <h2 style={{fontFamily:'var(--app-font-serif)',fontSize:32,letterSpacing:'-.05em',margin:'8px 0 7px'}}>Staff accounts are managed securely</h2>
+    <p style={{margin:'0 0 20px',color:'hsl(var(--muted-foreground))',fontSize:14,lineHeight:1.6}}>Public staff registration is disabled. Ask an authorized staff member to create your account.</p>
+    <Link className="btn" href="/staff/login">Go to staff sign in <ArrowRight size={16}/></Link>
   </div></AuthLayout>;
 }
 function StaffPasswordReset(){
@@ -263,10 +231,83 @@ function StudentEvents(){
 }
 function StudentAttendance(){
   const attendance=useListStudentAttendance();const dash=useGetStudentDashboard();
-  return <><Header title="My service record" subtitle="A transparent history of attendance and verified service hours."/>
+  return <><Header title="My service record" subtitle="A transparent history of attendance and verified service hours." action={<Link className="btn small" href="/student/attendance/scan"><QrCode size={16}/> Scan event QR</Link>}/>
     <div className="card" style={{padding:22,display:'flex',alignItems:'center',gap:18,marginBottom:22,background:'linear-gradient(110deg,hsl(var(--primary)),hsl(205 69% 43%))',color:'white'}}><div style={{width:54,height:54,borderRadius:16,display:'grid',placeItems:'center',background:'hsl(0 0% 100%/.15)'}}><ShieldCheck size={27}/></div><div><div className="eyebrow" style={{color:'hsl(195 75% 78%)'}}>Verified volunteer service</div><div style={{fontFamily:'var(--app-font-serif)',fontSize:32,fontWeight:800,letterSpacing:'-.05em',marginTop:3}}>{dash.data?.verifiedHours??'—'} <span style={{fontFamily:'var(--app-font-sans)',fontSize:14,fontWeight:600,letterSpacing:0}}>hours earned</span></div></div><div style={{marginLeft:'auto',textAlign:'right',fontSize:12,color:'hsl(210 35% 86%)'}}>Recorded by your<br/>NSS staff</div></div>
     <div className="card" style={{overflow:'hidden'}}><div style={{padding:'19px 22px',borderBottom:'1px solid hsl(var(--border))'}}><h2 style={{fontFamily:'var(--app-font-serif)',margin:0,fontSize:20}}>Attendance history</h2></div>
-      {attendance.isLoading?<Loading/>:attendance.error?<Problem error={attendance.error} retry={()=>void attendance.refetch()}/>:attendance.data?.length?<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:620}}><thead><tr>{['Activity','Date','Venue','Attendance','Verified hours'].map(x=><th key={x} style={{textAlign:x==='Verified hours'?'right':'left',padding:'13px 20px',background:'hsl(var(--muted)/.55)',color:'hsl(var(--muted-foreground))',fontSize:11,textTransform:'uppercase',letterSpacing:'.08em'}}>{x}</th>)}</tr></thead><tbody>{attendance.data.map((a:AttendanceRecord)=><tr key={a.registrationId} style={{borderTop:'1px solid hsl(var(--border))'}}><td style={{padding:'15px 20px',fontWeight:700}}>{a.eventTitle}</td><td style={{padding:'15px 20px',color:'hsl(var(--muted-foreground))'}}>{date(a.eventDate)}</td><td style={{padding:'15px 20px',color:'hsl(var(--muted-foreground))'}}>{a.venue}</td><td style={{padding:'15px 20px'}}><Pill tone={a.status==='attended'?'green':'red'}>{a.status}</Pill></td><td style={{padding:'15px 20px',textAlign:'right',fontWeight:700}}>{a.verifiedHours} hrs</td></tr>)}</tbody></table></div>:<Empty title="Your verified record starts here" body="Once you attend an NSS activity and your staff records attendance, the verified hours will appear here."/>}</div>
+      {attendance.isLoading?<Loading/>:attendance.error?<Problem error={attendance.error} retry={()=>void attendance.refetch()}/>:attendance.data?.length?<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:700}}><thead><tr>{['Activity','Date','Venue','Attendance','Recorded at','Verified hours'].map(x=><th key={x} style={{textAlign:x==='Verified hours'?'right':'left',padding:'13px 20px',background:'hsl(var(--muted)/.55)',color:'hsl(var(--muted-foreground))',fontSize:11,textTransform:'uppercase',letterSpacing:'.08em'}}>{x}</th>)}</tr></thead><tbody>{attendance.data.map((a:AttendanceRecord)=><tr key={a.registrationId} style={{borderTop:'1px solid hsl(var(--border))'}}><td style={{padding:'15px 20px',fontWeight:700}}>{a.eventTitle}</td><td style={{padding:'15px 20px',color:'hsl(var(--muted-foreground))'}}>{date(a.eventDate)}</td><td style={{padding:'15px 20px',color:'hsl(var(--muted-foreground))'}}>{a.venue}</td><td style={{padding:'15px 20px'}}><Pill tone={a.status==='attended'?'green':'red'}>{a.status}</Pill></td><td style={{padding:'15px 20px',color:'hsl(var(--muted-foreground))'}}>{a.attendanceAt?new Date(a.attendanceAt).toLocaleString():'—'}</td><td style={{padding:'15px 20px',textAlign:'right',fontWeight:700}}>{a.verifiedHours} hrs</td></tr>)}</tbody></table></div>:<Empty title="Your verified record starts here" body="Once you attend an NSS activity and your staff records attendance, the verified hours will appear here."/>}</div>
+  </>;
+}
+
+function StudentCertificates(){
+  const certificates=useListStudentCertificates();
+  const attendance=useListStudentAttendance();
+  const request=useRequestVolunteerCertificate();
+  const client=useQueryClient();
+  const [error,setError]=useState('');
+  const [downloading,setDownloading]=useState<string>();
+  const items=certificates.data||[];
+  const requestable=(attendance.data||[]).filter(record=>
+    record.status==='attended'&&!items.some(item=>item.eventId===record.eventId),
+  );
+  const download=async(certificateId:string)=>{
+    setError('');setDownloading(certificateId);
+    try{
+      const blob=await downloadVolunteerCertificate(certificateId);
+      const url=URL.createObjectURL(blob);const link=document.createElement('a');
+      link.href=url;link.download=`NSS-Certificate-${certificateId}.pdf`;link.click();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){setError(msgError(e));}
+    finally{setDownloading(undefined);}
+  };
+  return <><Header title="My certificates" subtitle="Request certificates for verified service and download approved PDFs." action={<Link className="btn outline small" href="/certificates/verify">Verify a certificate</Link>}/>
+    {error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13,marginBottom:14}}>{error}</div>}
+    <section className="card" style={{padding:20,marginBottom:18}}>
+      <div className="eyebrow">Eligible service</div><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:21,margin:'7px 0 15px'}}>Request a certificate</h2>
+      {attendance.isLoading?<Loading label="Checking verified attendance"/>:attendance.error?<Problem error={attendance.error} retry={()=>void attendance.refetch()}/>:requestable.length?<div style={{display:'grid',gap:10}}>{requestable.map(record=><div key={record.eventId} className="certificate-row"><div style={{minWidth:0}}><b>{record.eventTitle}</b><div style={{fontSize:12,color:'hsl(var(--muted-foreground))',marginTop:4}}>{date(record.eventDate)} · {record.verifiedHours} verified hours</div></div><button className="btn small" disabled={request.isPending} onClick={()=>request.mutate({data:{eventId:record.eventId}},{onSuccess:()=>{setError('');void certificates.refetch();invalid(getListStudentAttendanceQueryKey())},onError:e=>setError(msgError(e))})}>{request.isPending?'Submitting…':'Request certificate'}</button></div>)}</div>:<p style={{margin:0,fontSize:13,lineHeight:1.6,color:'hsl(var(--muted-foreground))'}}>After staff verifies your attendance for a completed activity, it will appear here.</p>}
+    </section>
+    <section className="card" style={{padding:20}}>
+      <div className="eyebrow">Request history</div><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:21,margin:'7px 0 15px'}}>Certificates</h2>
+      {certificates.isLoading?<Loading label="Loading certificates"/>:certificates.error?<Problem error={certificates.error} retry={()=>void certificates.refetch()}/>:items.length?<div style={{display:'grid',gap:10}}>{items.map((item:VolunteerCertificate)=><article key={item.id} className="certificate-row"><div style={{minWidth:0,flex:1}}><div style={{display:'flex',gap:9,alignItems:'center',flexWrap:'wrap'}}><b>{item.eventTitle}</b><Pill tone={item.status==='approved'?'green':item.status==='rejected'?'red':'amber'}>{item.status}</Pill></div><div style={{fontSize:12,color:'hsl(var(--muted-foreground))',marginTop:5}}>{item.volunteerHours} verified hours · Requested {date(item.requestedAt)}</div>{item.rejectionReason&&<p style={{margin:'8px 0 0',fontSize:13,color:'hsl(var(--destructive))'}}>Staff note: {item.rejectionReason}</p>}</div>{item.status==='approved'?<button className="btn small" disabled={downloading===item.certificateId} onClick={()=>void download(item.certificateId)}><ArrowDownToLine size={15}/>{downloading===item.certificateId?'Preparing…':'Download PDF'}</button>:item.status==='rejected'?<button className="btn outline small" disabled={request.isPending} onClick={()=>request.mutate({data:{eventId:item.eventId}},{onSuccess:()=>void certificates.refetch(),onError:e=>setError(msgError(e))})}>Request again</button>:<span style={{fontSize:12,color:'hsl(var(--muted-foreground))'}}>Awaiting staff review</span>}</article>)}</div>:<Empty title="No certificate requests yet" body="When staff verifies your completed service, you can request a certificate here."/>}
+    </section>
+  </>;
+}
+
+function VerifyCertificate(){
+  const [certificateId,setCertificateId]=useState('');
+  const [submitted,setSubmitted]=useState('');
+  const verification=useVerifyVolunteerCertificate(submitted,{query:{queryKey:getVerifyVolunteerCertificateQueryKey(submitted),enabled:!!submitted,retry:false}});
+  const search=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setSubmitted(certificateId.trim());};
+  return <div className="grain" style={{minHeight:'100dvh',padding:'clamp(24px,6vw,72px) 18px',background:'hsl(var(--background))'}}>
+    <div style={{maxWidth:680,margin:'0 auto'}}><Link href="/" className="brand-word" style={{fontSize:23,color:'hsl(var(--primary))'}}>NSS Connect</Link><section className="card" style={{padding:'clamp(18px,5vw,34px)',marginTop:28}}><div className="eyebrow">Public certificate verification</div><h1 style={{fontFamily:'var(--app-font-serif)',fontSize:'clamp(1.8rem,5vw,2.4rem)',margin:'8px 0'}}>Verify NSS service</h1><p style={{color:'hsl(var(--muted-foreground))',lineHeight:1.6}}>Enter the unique certificate ID to confirm it was issued by NSS Connect.</p><form onSubmit={search} style={{display:'flex',gap:9,flexWrap:'wrap'}}><input className="input" style={{flex:'1 1 220px'}} value={certificateId} onChange={e=>setCertificateId(e.target.value)} required maxLength={64} placeholder="e.g. NSS-…" aria-label="Certificate ID"/><button className="btn" disabled={verification.isFetching}>Verify ID</button></form>
+      {submitted&&verification.isLoading&&<Loading label="Verifying certificate"/>}{submitted&&verification.error&&<div role="alert" style={{marginTop:18,padding:14,borderRadius:10,background:'hsl(0 70% 94%)',color:'hsl(0 66% 42%)'}}>No issued certificate was found for that ID.</div>}
+      {verification.data&&<div role="status" style={{marginTop:20,padding:18,borderRadius:12,background:'hsl(154 47% 91%)',color:'hsl(155 48% 24%)'}}><div style={{display:'flex',gap:8,alignItems:'center',fontWeight:800}}><ShieldCheck size={18}/> Certificate verified</div><dl className="certificate-details">{[['Certificate ID',verification.data.certificateId],['Volunteer',verification.data.studentName],['College',verification.data.collegeName],['NSS unit',verification.data.unitName],['Activity',verification.data.eventTitle],['Verified hours',`${verification.data.volunteerHours} hours`],['Issued',date(verification.data.issuedAt)]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></div>}
+      <Link href="/" className="link" style={{display:'inline-block',marginTop:20}}>← NSS Connect home</Link></section></div>
+  </div>;
+}
+
+function StudentQrScan(){
+  const video=useRef<HTMLVideoElement>(null);const controls=useRef<{stop:()=>void}|null>(null);const submitting=useRef(false);
+  const reader=useMemo(()=>new BrowserQRCodeReader(),[]);const submit=useSubmitQrAttendance();const [token,setToken]=useState('');const [error,setError]=useState('');const [complete,setComplete]=useState(false);
+  const submitToken=useCallback((value:string)=>{
+    if(submitting.current)return;
+    submitting.current=true;setError('');
+    submit.mutate({data:{token:value.trim()}},{onSuccess:()=>{setComplete(true);controls.current?.stop();invalid(getListStudentAttendanceQueryKey(),getGetStudentDashboardQueryKey())},onError:e=>{setError(msgError(e));submitting.current=false}});
+  },[submit]);
+  useEffect(()=>{
+    if(!video.current)return;
+    let disposed=false;
+    void reader.decodeFromVideoDevice(undefined,video.current,(result)=>{
+      if(result)submitToken(result.getText());
+    }).then(scanner=>{if(disposed)scanner.stop();else controls.current=scanner}).catch(e=>setError(msgError(e)));
+    return ()=>{disposed=true;controls.current?.stop();controls.current=null};
+  },[reader,submitToken]);
+  const manualSubmit=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();if(token.trim())submitToken(token)};
+  return <><Header title="Scan attendance QR" subtitle="Scan the current QR code shown by NSS staff, or enter its code manually."/>
+    <div className="qr-scan-grid">
+      <section className="card qr-scan-card"><div className="eyebrow">Camera scanner</div><div className="qr-video-frame"><video ref={video} aria-label="QR code camera preview" muted playsInline/></div><p style={{fontSize:13,color:'hsl(var(--muted-foreground))',lineHeight:1.55}}>Allow camera access to scan. Camera access requires HTTPS or localhost.</p></section>
+      <section className="card qr-manual-card"><div className="eyebrow">Manual entry</div><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:21,margin:'8px 0 12px'}}>Enter the QR code</h2><form onSubmit={manualSubmit} style={{display:'grid',gap:12}}><label className="field">Attendance token<input className="input" value={token} onChange={e=>setToken(e.target.value)} minLength={32} maxLength={64} required autoComplete="off" data-testid="input-attendance-token"/></label><button className="btn" disabled={submit.isPending||complete}>{submit.isPending?'Verifying…':'Verify attendance'} <QrCode size={16}/></button></form>{error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13,marginTop:12}}>{error}</div>}{complete&&<div role="status" style={{color:'hsl(155 48% 29%)',fontSize:14,marginTop:14}}>Attendance recorded successfully.</div>}<Link className="link" href="/student/attendance" style={{display:'inline-block',marginTop:20,fontSize:13}}>← Back to service record</Link></section>
+    </div>
+    <style>{`.qr-scan-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.qr-scan-card,.qr-manual-card{padding:clamp(16px,3vw,24px);min-width:0}.qr-video-frame{margin-top:14px;overflow:hidden;border-radius:12px;background:#101820;aspect-ratio:4/3}.qr-video-frame video{width:100%;height:100%;object-fit:cover}.qr-manual-card{align-self:start}@media(max-width:767px){.qr-scan-grid{grid-template-columns:1fr}}`}</style>
   </>;
 }
 function Announcements(){
@@ -321,8 +362,17 @@ function EventForm({event,onClose,onSaved}:{event?:Event;onClose:()=>void;onSave
 function Modal({title,children,onClose}:{title:string;children:ReactNode;onClose:()=>void}){
   return <div role="dialog" aria-modal="true" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}} style={{position:'fixed',inset:0,zIndex:25,background:'hsl(215 38% 17%/.45)',display:'grid',placeItems:'center',padding:14}}><div className="card" style={{width:'min(100%,700px)',maxHeight:'92dvh',overflowY:'auto',padding:'23px clamp(16px,4vw,28px)',boxShadow:'var(--shadow-xl)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:19}}><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:23,margin:0}}>{title}</h2><button type="button" className="btn outline small" aria-label="Close" onClick={onClose}><X size={16}/></button></div>{children}</div></div>;
 }
+function AttendanceQrModal({event,onClose}:{event:Event;onClose:()=>void}){
+  const create=useCreateAttendanceQr();const revoke=useRevokeAttendanceQr();const [qr,setQr]=useState<AttendanceQrToken>();const [image,setImage]=useState('');const [error,setError]=useState('');const [now,setNow]=useState(Date.now());
+  const remaining=qr?Math.max(0,Math.ceil((new Date(qr.expiresAt).getTime()-now)/1000)):0;
+  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(timer)},[]);
+  useEffect(()=>{if(!qr)return;let cancelled=false;void QRCode.toDataURL(qr.token,{width:320,margin:2,errorCorrectionLevel:'M'}).then(data=>{if(!cancelled)setImage(data)}).catch(e=>{if(!cancelled)setError(msgError(e))});return()=>{cancelled=true}},[qr]);
+  const createQr=()=>{setError('');setImage('');setQr(undefined);create.mutate({eventId:event.id,data:{expiresInSeconds:300}},{onSuccess:setQr,onError:e=>setError(msgError(e))})};
+  const revokeQr=()=>{if(!qr)return;revoke.mutate({qrId:qr.id},{onSuccess:()=>{setQr(undefined);setImage('')},onError:e=>setError(msgError(e))})};
+  return <Modal title={`Attendance QR · ${event.title}`} onClose={onClose}><div style={{display:'grid',justifyItems:'center',gap:13,textAlign:'center'}}>{qr&&remaining>0&&image?<><img src={image} alt="Short-lived event attendance QR code" width="320" height="320" style={{width:'min(100%,320px)',height:'auto',borderRadius:10,background:'white',padding:8}}/><b>Expires in {Math.floor(remaining/60)}:{String(remaining%60).padStart(2,'0')}</b><p style={{margin:0,fontSize:13,color:'hsl(var(--muted-foreground))'}}>Only registered students can use this code. Each student can record attendance once.</p><button className="btn danger small" onClick={revokeQr} disabled={revoke.isPending}>{revoke.isPending?'Revoking…':'Expire this QR now'}</button></>:<><div style={{width:60,height:60,borderRadius:18,display:'grid',placeItems:'center',background:'hsl(var(--secondary))',color:'hsl(var(--primary))'}}><QrCode size={28}/></div><p style={{maxWidth:420,margin:'0 0 4px',fontSize:14,lineHeight:1.6,color:'hsl(var(--muted-foreground))'}}>Create an attendance window that expires after five minutes. Each registered student can use it once, and it can be revoked sooner at any time.</p><button className="btn" onClick={createQr} disabled={create.isPending}>{create.isPending?'Creating…':'Create attendance QR'} <QrCode size={16}/></button></>}{error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13}}>{error}</div>}</div></Modal>;
+}
 function StaffEvents(){
-  const [status,setStatus]=useState<'all'|'upcoming'|'completed'>('all');const [editing,setEditing]=useState<Event|undefined>();const [newOpen,setNewOpen]=useState(false);const [registrationsFor,setRegistrationsFor]=useState<number|undefined>();
+  const [status,setStatus]=useState<'all'|'upcoming'|'completed'>('all');const [editing,setEditing]=useState<Event|undefined>();const [newOpen,setNewOpen]=useState(false);const [registrationsFor,setRegistrationsFor]=useState<number|undefined>();const [qrFor,setQrFor]=useState<Event>();
   const events=useListEvents({status});const regs=useListEventRegistrations(registrationsFor||0,{query:{enabled:!!registrationsFor,queryKey:getListEventRegistrationsQueryKey(registrationsFor||0)}});
   const publish=usePublishEvent();const cancel=useCancelEvent();const attendance=useRecordAttendance();
   const after=()=>invalid(getListEventsQueryKey(),getGetStaffDashboardQueryKey(),...(registrationsFor?[getListEventRegistrationsQueryKey(registrationsFor)]:[]));
@@ -332,10 +382,11 @@ function StaffEvents(){
     {actionError&&<div role="alert" style={{padding:12,marginBottom:12,borderRadius:9,background:'hsl(0 70% 94%)',color:'hsl(0 66% 42%)',fontSize:13}}>{actionError}</div>}
     {events.isLoading?<Loading/>:events.error?<Problem error={events.error} retry={()=>void events.refetch()}/>:events.data?.length?<div style={{display:'grid',gap:13}}>{events.data.map((e:Event)=> <article className="card" key={e.id} style={{padding:19,display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',gap:16,alignItems:'center'}}>
       <div><div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><Pill tone={e.status==='published'?'green':e.status==='draft'?'amber':e.status==='cancelled'?'red':'gray'}>{e.status}</Pill><span style={{fontSize:12,color:'hsl(var(--muted-foreground))'}}>{date(e.startsAt)} · {time(e.startsAt)}</span></div><h2 style={{fontFamily:'var(--app-font-serif)',fontSize:20,margin:'9px 0 5px'}}>{e.title}</h2><div style={{fontSize:12,color:'hsl(var(--muted-foreground))'}}>{e.venue} · {e.registrationCount} registrations · {e.volunteerHours} service hours</div></div>
-      <div style={{display:'flex',justifyContent:'flex-end',gap:7,flexWrap:'wrap'}}><button className="btn outline small" onClick={()=>setRegistrationsFor(e.id)} data-testid={`button-registrations-${e.id}`}>Registrants</button>{e.status==='draft'&&<button className="btn secondary small" disabled={publish.isPending} onClick={()=>publish.mutate({eventId:e.id},{onSuccess:after,onError:e=>setActionError(msgError(e))})} data-testid={`button-publish-event-${e.id}`}>Publish</button>}{e.status!=='cancelled'&&e.status!=='completed'&&<button className="btn outline small" onClick={()=>{setEditing(e);setNewOpen(true)}} data-testid={`button-edit-event-${e.id}`}>Edit</button>}{e.status==='published'&&<button className="btn danger small" disabled={cancel.isPending} onClick={()=>{if(confirm('Cancel this activity?'))cancel.mutate({eventId:e.id},{onSuccess:after,onError:e=>setActionError(msgError(e))})}} data-testid={`button-cancel-event-${e.id}`}>Cancel</button>}</div>
+      <div style={{display:'flex',justifyContent:'flex-end',gap:7,flexWrap:'wrap'}}><button className="btn outline small" onClick={()=>setRegistrationsFor(e.id)} data-testid={`button-registrations-${e.id}`}>Registrants</button>{e.status==='published'&&Date.now()>=new Date(e.startsAt).getTime()&&Date.now()<new Date(e.endsAt).getTime()&&<button className="btn secondary small" onClick={()=>setQrFor(e)} data-testid={`button-attendance-qr-${e.id}`}><QrCode size={14}/> Attendance QR</button>}{e.status==='draft'&&<button className="btn secondary small" disabled={publish.isPending} onClick={()=>publish.mutate({eventId:e.id},{onSuccess:after,onError:e=>setActionError(msgError(e))})} data-testid={`button-publish-event-${e.id}`}>Publish</button>}{e.status!=='cancelled'&&e.status!=='completed'&&<button className="btn outline small" onClick={()=>{setEditing(e);setNewOpen(true)}} data-testid={`button-edit-event-${e.id}`}>Edit</button>}{e.status==='published'&&<button className="btn danger small" disabled={cancel.isPending} onClick={()=>{if(confirm('Cancel this activity?'))cancel.mutate({eventId:e.id},{onSuccess:after,onError:e=>setActionError(msgError(e))})}} data-testid={`button-cancel-event-${e.id}`}>Cancel</button>}</div>
     </article>)}</div>:<Empty title="No NSS programs yet" body="Create a program draft, then publish it so student volunteers can register." action={<button className="btn small" onClick={()=>setNewOpen(true)}><Plus size={15}/> Create NSS program</button>}/>}
     {newOpen&&<EventForm event={editing} onClose={()=>{setNewOpen(false);setEditing(undefined)}} onSaved={()=>void events.refetch()}/>}
     {registrationsFor&&<Modal title="Activity registrants" onClose={()=>setRegistrationsFor(undefined)}>{regs.isLoading?<Loading/>:regs.error?<Problem error={regs.error} retry={()=>void regs.refetch()}/>:regs.data?.length?<div style={{display:'grid',gap:8}}>{regs.data.map((r:EventRegistration)=><div key={r.id} className="card" style={{padding:13,display:'grid',gridTemplateColumns:'minmax(130px,1fr) minmax(90px,.7fr) auto',gap:10,alignItems:'center'}}><div><b style={{fontSize:13}}>{r.studentName}</b><div style={{fontSize:11,color:'hsl(var(--muted-foreground))'}}>{r.studentCode} · {r.department}</div></div><Pill tone={r.attendanceStatus==='attended'?'green':r.attendanceStatus==='absent'?'red':'amber'}>{r.attendanceStatus||'pending'}</Pill><div style={{display:'flex',gap:6}}>{(['attended','absent'] as const).map(s=><button key={s} className={`btn small ${s==='absent'?'outline':'secondary'}`} disabled={attendance.isPending} onClick={()=>attendance.mutate({registrationId:r.id,data:{status:s}},{onSuccess:after,onError:e=>setActionError(msgError(e))})} data-testid={`button-attendance-${s}-${r.id}`}>{s==='attended'?'Present':'Absent'}</button>)}</div></div>)}</div>:<Empty title="No one has registered yet" body="Share this published activity with student volunteers to begin collecting registrations."/>}</Modal>}
+    {qrFor&&<AttendanceQrModal event={qrFor} onClose={()=>setQrFor(undefined)}/>}
   </>;
 }
 function StaffAccounts(){
@@ -413,6 +464,26 @@ function StaffStudents(){
     <div className="card" style={{overflow:'hidden'}}>{students.isLoading?<Loading/>:students.error?<Problem error={students.error} retry={()=>void students.refetch()}/>:students.data?.length?<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',minWidth:650,fontSize:13}}><thead><tr>{['Student','Student ID','Department','Year','Phone','Verified hours'].map(x=><th key={x} style={{padding:'14px 18px',textAlign:x==='Verified hours'?'right':'left',background:'hsl(var(--muted)/.55)',fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:'hsl(var(--muted-foreground))'}}>{x}</th>)}</tr></thead><tbody>{students.data.map((s:StudentProfile)=><tr key={s.id} style={{borderTop:'1px solid hsl(var(--border))'}}><td style={{padding:'14px 18px'}}><div style={{display:'flex',alignItems:'center',gap:10}}><div style={{width:34,height:34,borderRadius:50,display:'grid',placeItems:'center',background:'hsl(var(--secondary))',color:'hsl(var(--primary))',fontWeight:800,fontSize:11}}>{initials(s.name)}</div><div><b>{s.name}</b><div style={{fontSize:11,color:'hsl(var(--muted-foreground))'}}>{s.email}</div></div></div></td><td style={{padding:'14px 18px',fontFamily:'var(--app-font-mono)',fontSize:12}}>{s.studentId}</td><td style={{padding:'14px 18px'}}>{s.department}</td><td style={{padding:'14px 18px'}}>{s.year}</td><td style={{padding:'14px 18px',color:'hsl(var(--muted-foreground))'}}>{s.phone||'—'}</td><td style={{padding:'14px 18px',textAlign:'right',fontWeight:800}}>{s.verifiedHours} hrs</td></tr>)}</tbody></table></div>:<Empty title={search?'No students match that search':'Your roster is ready to grow'} body={search?'Try a different name, student ID or department.':'Registered student volunteers will appear in this roster.'} action={search?<button className="btn outline small" onClick={()=>setSearch('')}>Clear search</button>:undefined}/>}</div>
   </>;
 }
+function StaffCertificates(){
+  const [status,setStatus]=useState<'pending'|'approved'|'rejected'>('pending');
+  const certificates=useListStaffCertificates({status});
+  const approve=useApproveVolunteerCertificate();
+  const reject=useRejectVolunteerCertificate();
+  const [rejecting,setRejecting]=useState<StaffVolunteerCertificate>();
+  const [error,setError]=useState('');
+  const refresh=()=>{void certificates.refetch();invalid(certificates.queryKey);};
+  const rejectRequest=(e:FormEvent<HTMLFormElement>)=>{
+    e.preventDefault();if(!rejecting)return;
+    const form=new FormData(e.currentTarget);
+    reject.mutate({certificateId:rejecting.certificateId,data:{reason:String(form.get('reason')).trim()}},{onSuccess:()=>{setRejecting(undefined);setError('');refresh()},onError:e=>setError(msgError(e))});
+  };
+  return <><Header title="Certificate review" subtitle="Review verified volunteer certificate requests before issuance."/>
+    <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{(['pending','approved','rejected'] as const).map(value=><button key={value} className={`btn small ${status===value?'':'outline'}`} onClick={()=>setStatus(value)} style={{textTransform:'capitalize'}}>{value}</button>)}</div>
+    {error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13,marginBottom:12}}>{error}</div>}
+    {certificates.isLoading?<Loading label="Loading certificate requests"/>:certificates.error?<Problem error={certificates.error} retry={()=>void certificates.refetch()}/>:certificates.data?.length?<div style={{display:'grid',gap:12}}>{certificates.data.map((item:StaffVolunteerCertificate)=><article key={item.id} className="card certificate-row"><div style={{minWidth:0,flex:1}}><div style={{display:'flex',gap:9,alignItems:'center',flexWrap:'wrap'}}><b>{item.eventTitle}</b><Pill tone={item.status==='approved'?'green':item.status==='rejected'?'red':'amber'}>{item.status}</Pill></div><div style={{fontSize:13,marginTop:8}}>{item.studentName} · {item.studentCode||item.studentEmail}</div><div style={{fontSize:12,color:'hsl(var(--muted-foreground))',marginTop:4}}>{item.volunteerHours} verified hours · Requested {date(item.requestedAt)}</div>{item.rejectionReason&&<p style={{margin:'8px 0 0',fontSize:13,color:'hsl(var(--destructive))'}}>Reason: {item.rejectionReason}</p>}</div>{status==='pending'&&<div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button className="btn small" disabled={approve.isPending} onClick={()=>{setError('');approve.mutate({certificateId:item.certificateId},{onSuccess:refresh,onError:e=>setError(msgError(e))})}}><Check size={15}/>{approve.isPending?'Issuing…':'Approve & issue'}</button><button className="btn danger small" onClick={()=>{setError('');setRejecting(item)}}>Reject</button></div>}</article>)}</div>:<Empty title={`No ${status} certificates`} body={status==='pending'?'New requests appear here after students have verified attendance.':`There are no ${status} certificate records to show.`}/>}
+    {rejecting&&<Modal title="Reject certificate request" onClose={()=>setRejecting(undefined)}><form onSubmit={rejectRequest} style={{display:'grid',gap:13}}><p style={{margin:0,fontSize:14,color:'hsl(var(--muted-foreground))'}}>Explain why the request for {rejecting.studentName} was not approved. The student can see this note.</p><label className="field">Reason<textarea className="textarea" name="reason" required minLength={3} maxLength={500}/></label>{error&&<div role="alert" style={{color:'hsl(var(--destructive))',fontSize:13}}>{error}</div>}<div style={{display:'flex',justifyContent:'flex-end',gap:8}}><button type="button" className="btn outline" onClick={()=>setRejecting(undefined)}>Cancel</button><button className="btn danger" disabled={reject.isPending}>{reject.isPending?'Submitting…':'Reject request'}</button></div></form></Modal>}
+  </>;
+}
 function AnnouncementForm({item,onClose}:{item?:Announcement;onClose:()=>void}){
   const create=useCreateAnnouncement();const update=useUpdateAnnouncement();const [error,setError]=useState('');
   const save=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();setError('');const f=new FormData(e.currentTarget);const data={title:String(f.get('title')),body:String(f.get('body'))};const cb={onSuccess:()=>{invalid(getListManageAnnouncementsQueryKey(),getListAnnouncementsQueryKey());onClose()},onError:(e:unknown)=>setError(msgError(e))};if(item)update.mutate({announcementId:item.id,data},{...cb});else create.mutate({data},{...cb});};
@@ -436,6 +507,8 @@ function Router(){
     <Route path="/student"><Routed component={StudentHome} role="student"/></Route>
     <Route path="/student/events"><Routed component={StudentEvents} role="student"/></Route>
     <Route path="/student/attendance"><Routed component={StudentAttendance} role="student"/></Route>
+    <Route path="/student/attendance/scan"><Routed component={StudentQrScan} role="student"/></Route>
+    <Route path="/student/certificates"><Routed component={StudentCertificates} role="student"/></Route>
     <Route path="/student/announcements"><Routed component={Announcements} role="student"/></Route>
     <Route path="/student/profile"><Routed component={Profile} role="student"/></Route>
     <Route path="/staff"><Routed component={StaffHome} role="staff"/></Route>
@@ -444,8 +517,10 @@ function Router(){
     <Route path="/staff/events"><Routed component={StaffEvents} role="staff"/></Route>
     <Route path="/staff/students"><Routed component={StaffStudents} role="staff"/></Route>
     <Route path="/staff/accounts"><Routed component={StaffAccounts} role="staff"/></Route>
+    <Route path="/staff/certificates"><Routed component={StaffCertificates} role="staff"/></Route>
     <Route path="/staff/notices"><Routed component={StaffAnnouncements} role="staff"/></Route>
     <Route path="/staff/announcements"><Routed component={StaffAnnouncements} role="staff"/></Route>
+    <Route path="/certificates/verify" component={VerifyCertificate}/>
     <Route><NotFound/></Route>
   </Switch>;
 }

@@ -4,15 +4,15 @@ NSS Connect is a responsive college National Service Scheme portal for volunteer
 
 ## Platform stack
 
-The supplied project brief requested Flask and MySQL. This Replit project is built on the platform's supported deployable stack instead: React + Vite, Express + TypeScript, and PostgreSQL. The features and role protections are implemented on that stack; the source ZIP is not a Flask/MySQL conversion.
+NSS Connect uses React + Vite, Express + TypeScript, PostgreSQL, and pnpm. The API and frontend are served from one origin in production.
 
 ## Run in this Replit project
 
 The project uses the provisioned PostgreSQL database and the managed app preview. Use the **NSS Connect** preview to open the app. The API runs at `/api`.
 
-Staff can create the designated staff login from **Staff login → Create staff login** by first entering the shared staff-entry password, then choosing a name and individual account password. The entry password must be at least 15 characters.
+Public staff registration is disabled. The first staff account must be created with the one-time local bootstrap command below; authorized staff can create additional accounts in the staff dashboard.
 
-Set a unique secret of at least 15 characters as `STAFF_SIGNUP_INVITE_PASSWORD` in the deployment's private environment variables. Share it only with trusted staff; anyone who knows it can create the designated staff login. The authorized staff email is fixed in the API to `suryasaravanan542@gmail.com`.
+Set a unique secret of at least 15 characters as `STAFF_SIGNUP_INVITE_PASSWORD` in the deployment's private environment variables. It is used by the existing staff password-reset flow; share it only with trusted staff.
 
 For local development, set `STAFF_SIGNUP_INVITE_PASSWORD` as well as `DATABASE_URL` and `SESSION_SECRET`. The old one-time staff bootstrap command remains available:
 
@@ -26,9 +26,9 @@ The command prompts for the name, email, and a password without echoing the pass
 
 1. Download the NSS Connect source ZIP from the project chat and extract it.
 2. Install Node.js 24 and pnpm, then run `pnpm install` from the extracted project folder.
-3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string, `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 15 characters. Do not commit `.env`.
+3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string, `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 15 characters. `NSS_COLLEGE_NAME` and `NSS_UNIT_NAME` are optional certificate settings; they default to Bannari Amman Institute of Technology and National Service Scheme. Do not commit `.env`.
 4. Load those environment values in your terminal before running the commands below. On macOS/Linux, use `set -a; source .env; set +a`.
-5. Create the database tables with `pnpm --filter @workspace/db run push`, or apply `database/schema.sql` with `psql "$DATABASE_URL" -f database/schema.sql`.
+5. Create/update the database tables with `pnpm --filter @workspace/db run push`, then apply the tracked additive migrations with `pnpm --filter @workspace/db run migrate`. The migration command applies versions 004 onward once and safely skips versions already recorded.
 6. In one terminal, start the API with `PORT=5000 pnpm --filter @workspace/api-server run dev`.
 7. In another terminal, start the web app with `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/nss-connect run dev`.
 8. Open the local Vite URL. Create the first staff account with `pnpm --filter @workspace/api-server run create-staff`, sign in at `/staff/login`, and create student accounts through **Sign up** to test both roles.
@@ -45,17 +45,23 @@ This Blueprint uses Render's free web-service and Postgres plans for an initial 
 
 ## Features
 
-- Separate student and NSS staff dashboards with server-verified roles
-- Secure password hashing, signed opaque sessions, CSRF checks, input validation, and role-protected API routes
+- Separate student and NSS staff dashboards with server-verified roles and staff-managed account creation
+- Scrypt password hashing, opaque server-side sessions, secure HTTP-only cookies, CSRF checks, login lockout/rate limiting, input validation, and role-protected API routes
 - Event publishing, registration/cancellation, attendance, and hours calculated only from verified attendance
+- Short-lived QR attendance tokens with revocation, registration checks, and duplicate-attendance prevention
+- Staff-reviewed volunteer certificate requests, downloadable Unicode PDF certificates, and public certificate verification
 - Student announcements with unread tracking
 - NSS staff program creation, activity monitoring, attendance, student directory, and CSV export of verified volunteer hours
 - PostgreSQL schema with foreign keys, unique registration constraints, and indexes
 
+## Backups
+
+Automated encrypted off-site backups are not configured in this repository yet. Render's free Postgres plan is temporary and does not provide a durable backup target; do not rely on it for important data. Configure a separate managed PostgreSQL plan and an external encrypted backup destination before production use.
+
 ## Important setup notes
 
 - Student sign-in accepts email or student ID. Staff sign in at `/staff/login` using their staff email; access is read from the account record and never selected by the user.
-- The designated staff login can be created through the staff login page with the shared secret configured as `STAFF_SIGNUP_INVITE_PASSWORD`. The one-time local/Replit CLI command remains available as a bootstrap alternative.
+- Public staff registration is disabled. Create the first staff account with the one-time local CLI bootstrap command; authorized staff can create additional accounts from the staff dashboard.
 - Configure `DATABASE_URL` and `SESSION_SECRET` as private environment variables when hosting outside this project.
 - This project is ready for Replit publishing. For other hosts, run the API and web app as separate services and route `/api` to the API.
 
