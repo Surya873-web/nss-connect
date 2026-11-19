@@ -1,4 +1,4 @@
--- NSS Connect PostgreSQL schema.
+-- NSS Connect MySQL schema.
 -- This file is equivalent to lib/db/src/schema/nss.ts.
 
 CREATE TABLE IF NOT EXISTS nss_users (
