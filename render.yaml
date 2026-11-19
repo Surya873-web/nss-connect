@@ -12,10 +12,16 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: nss-connect-db
+          property: connectionString
       - key: STAFF_SIGNUP_INVITE_PASSWORD
         sync: false
       - key: NSS_COLLEGE_NAME
         value: Bannari Amman Institute of Technology
       - key: NSS_UNIT_NAME
         value: National Service Scheme
+databases:
+  - name: nss-connect-db
+    databaseName: nss_connect
+    plan: free

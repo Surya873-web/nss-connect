@@ -129,7 +129,7 @@ router.post(
             role: "staff",
             passwordHash: hashPassword(parsed.data.password),
           })
-          .$returningId();
+          .returning({ id: usersTable.id });
         const [account] = await tx
           .select({
             id: usersTable.id,
@@ -179,10 +179,11 @@ router.delete(
       res.status(409).json({ error: "You cannot delete the staff account you are currently using." });
       return;
     }
-    const [deleted] = await db
+    const deleted = await db
       .delete(usersTable)
       .where(and(eq(usersTable.id, params.data.staffId), eq(usersTable.role, "staff")))
-    if (deleted.affectedRows !== 1) {
+      .returning({ id: usersTable.id });
+    if (deleted.length !== 1) {
       res.status(404).json({ error: "Staff account not found." });
       return;
     }
@@ -356,7 +357,7 @@ router.post(
         status: "draft",
         createdBy: req.auth!.id,
       })
-      .$returningId();
+      .returning({ id: eventsTable.id });
     const [event] = await db
       .select()
       .from(eventsTable)
@@ -486,11 +487,12 @@ router.post(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const [updated] = await db
+    const updated = await db
       .update(eventsTable)
       .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(eventsTable.id, params.data.eventId));
-    if (updated.affectedRows !== 1) {
+      .where(eq(eventsTable.id, params.data.eventId))
+      .returning({ id: eventsTable.id });
+    if (updated.length !== 1) {
       res.status(404).json({ error: "Event not found." });
       return;
     }
@@ -661,7 +663,7 @@ router.post(
         published: true,
         createdBy: req.auth!.id,
       })
-      .$returningId();
+      .returning({ id: announcementsTable.id });
     const [announcement] = await db
       .select()
       .from(announcementsTable)
@@ -752,10 +754,11 @@ router.delete(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const [deleted] = await db
+    const deleted = await db
       .delete(announcementsTable)
       .where(eq(announcementsTable.id, params.data.announcementId))
-    if (deleted.affectedRows !== 1) {
+      .returning({ id: announcementsTable.id });
+    if (deleted.length !== 1) {
       res.status(404).json({ error: "Announcement not found." });
       return;
     }

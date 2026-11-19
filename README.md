@@ -4,11 +4,11 @@ NSS Connect is a responsive college National Service Scheme portal for volunteer
 
 ## Platform stack
 
-NSS Connect uses React + Vite, Express + TypeScript, MySQL, and pnpm. The API and frontend are served from one origin in production.
+NSS Connect uses React + Vite, Express + TypeScript, PostgreSQL, and pnpm. The API and frontend are served from one origin in production.
 
 ## Run in this Replit project
 
-The project uses the provisioned MySQL database and the managed app preview. Use the **NSS Connect** preview to open the app. The API runs at `/api`.
+The project uses the provisioned PostgreSQL database and the managed app preview. Use the **NSS Connect** preview to open the app. The API runs at `/api`.
 
 Public staff registration is disabled. The first staff account must be created with the one-time local bootstrap command below; authorized staff can create additional accounts in the staff dashboard.
 
@@ -26,9 +26,9 @@ The command prompts for the name, email, and a password without echoing the pass
 
 1. Download the NSS Connect source ZIP from the project chat and extract it.
 2. Install Node.js 24 and pnpm, then run `pnpm install` from the extracted project folder.
-3. Create a MySQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your MySQL connection string (e.g. `mysql://USER:PASSWORD@HOST:3306/DATABASE`), `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 15 characters. `NSS_COLLEGE_NAME` and `NSS_UNIT_NAME` are optional certificate settings; they default to Bannari Amman Institute of Technology and National Service Scheme. Do not commit `.env`.
+3. Create a PostgreSQL database and copy `.env.example` to `.env`. Set `DATABASE_URL` to your PostgreSQL connection string (e.g. `postgresql://USER:PASSWORD@HOST:5432/DATABASE`), `SESSION_SECRET` to a random value of at least 32 characters, and `STAFF_SIGNUP_INVITE_PASSWORD` to a unique secret of at least 15 characters. `NSS_COLLEGE_NAME` and `NSS_UNIT_NAME` are optional certificate settings; they default to Bannari Amman Institute of Technology and National Service Scheme. Do not commit `.env`.
 4. Load those environment values in your terminal before running the commands below. On macOS/Linux, use `set -a; source .env; set +a`.
-5. Create/update the database tables with `pnpm --filter @workspace/db run push`, then apply the tracked additive migrations with `pnpm --filter @workspace/db run migrate`. The migration command applies versions 004 onward once and safely skips versions already recorded.
+5. Create/update the PostgreSQL database tables with `pnpm --filter @workspace/db run push`, then apply the staff-account limit trigger with `pnpm --filter @workspace/db run apply-staff-limit`.
 6. In one terminal, start the API with `PORT=5000 pnpm --filter @workspace/api-server run dev`.
 7. In another terminal, start the web app with `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/nss-connect run dev`.
 8. Open the local Vite URL. Create the first staff account with `pnpm --filter @workspace/api-server run create-staff`, sign in at `/staff/login`, and create student accounts through **Sign up** to test both roles.
@@ -37,11 +37,11 @@ The local web server forwards `/api` to the API on port 5000. If you use Windows
 
 ## Deploy to Render
 
-The root `render.yaml` defines one web service named `nss-connect`. You must provide a MySQL database separately and set `DATABASE_URL` as a private environment variable. The API serves the built frontend and API on the same origin, and the database schema is applied during each build. Render generates `SESSION_SECRET`.
+The root `render.yaml` defines one web service named `nss-connect` and one PostgreSQL database. `DATABASE_URL` is connected from the database resource automatically. The API serves the built frontend and API on the same origin, and the database schema is applied during each build. Render generates `SESSION_SECRET`.
 
 To deploy, put this project in a GitHub repository, sign in to Render, choose **New → Blueprint**, connect the repository, and deploy the `render.yaml` Blueprint. Render will provide the public `onrender.com` URL after the first successful deploy.
 
-This Blueprint uses Render's free web-service plan for an initial preview. Free web services can sleep when idle. Provision a separate MySQL database (Render or another provider) and set `DATABASE_URL` as a private environment variable. Do not store important or long-term data in a temporary database. Upgrade to a persistent paid plan before production use; check the current price in Render before confirming the upgrade.
+This Blueprint uses Render's free web-service plans for an initial preview. Free services and databases can have availability limitations. Do not store important or long-term data in a temporary database. Upgrade to persistent paid plans before production use.
 
 ## Features
 
@@ -52,17 +52,17 @@ This Blueprint uses Render's free web-service plan for an initial preview. Free 
 - Staff-reviewed volunteer certificate requests, downloadable Unicode PDF certificates, and public certificate verification
 - Student announcements with unread tracking
 - NSS staff program creation, activity monitoring, attendance, student directory, and CSV export of verified volunteer hours
-- MySQL schema with foreign keys, unique registration constraints, and indexes
+- PostgreSQL schema with foreign keys, unique registration constraints, and indexes
 
 ## Backups
 
-Automated encrypted off-site backups are not configured in this repository yet. Render's free web-service plan is temporary and does not provide a durable backup target; do not rely on it for important data. Configure a separate managed MySQL plan and an external encrypted backup destination before production use.
+Automated encrypted off-site backups are not configured in this repository yet. Render's free plans are temporary and do not provide a durable backup target; do not rely on them for important data. Configure a separate managed PostgreSQL plan and an external encrypted backup destination before production use.
 
 ## Important setup notes
 
 - Student sign-in accepts email or student ID. Staff sign in at `/staff/login` using their staff email; access is read from the account record and never selected by the user.
 - Public staff registration is disabled. Create the first staff account with the one-time local CLI bootstrap command; authorized staff can create additional accounts from the staff dashboard.
-- Configure `DATABASE_URL` (MySQL connection string) and `SESSION_SECRET` as private environment variables when hosting outside this project.
+- Configure `DATABASE_URL` (PostgreSQL connection string) and `SESSION_SECRET` as private environment variables when hosting outside this project.
 - This project is ready for Replit publishing. For other hosts, run the API and web app as separate services and route `/api` to the API.
 
 ## Staff role migration

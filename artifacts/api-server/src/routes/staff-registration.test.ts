@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { test } from "node:test";
 import express from "express";
 
-process.env.DATABASE_URL = "mysql://localhost/nss_connect_test";
+process.env.DATABASE_URL = "postgresql://localhost/nss_connect_test";
 
 const { default: staffRegistrationRouter } = await import("./staff-registration");
 

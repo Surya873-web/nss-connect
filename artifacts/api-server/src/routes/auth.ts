@@ -75,7 +75,8 @@ async function recordLoginFailure(keyHash: string, threshold: number): Promise<v
       lockedUntil: null,
       updatedAt: now,
     })
-    .onDuplicateKeyUpdate({
+    .onConflictDoUpdate({
+      target: authLoginAttemptsTable.keyHash,
       set: {
         attempts: sql`CASE WHEN ${authLoginAttemptsTable.windowStartedAt} <= ${windowCutoff} THEN 1 ELSE ${authLoginAttemptsTable.attempts} + 1 END`,
         windowStartedAt: sql`CASE WHEN ${authLoginAttemptsTable.windowStartedAt} <= ${windowCutoff} THEN ${now} ELSE ${authLoginAttemptsTable.windowStartedAt} END`,
@@ -211,7 +212,7 @@ router.post("/auth/students", async (req, res): Promise<void> => {
         year: data.year,
         phone: data.phone?.trim() || null,
       })
-      .$returningId();
+      .returning({ id: usersTable.id });
     const session = await createSession(
       {
         id: created.id,

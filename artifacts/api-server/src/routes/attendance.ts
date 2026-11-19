@@ -74,7 +74,7 @@ router.post(
         expiresAt,
         createdBy: req.auth!.id,
       })
-      .$returningId();
+      .returning({ id: attendanceQrTokensTable.id });
     const qrId = createdQr.id;
     await recordStaffAction(
       req.auth!.id,
@@ -127,7 +127,8 @@ router.delete(
           isNull(attendanceQrTokensTable.revokedAt),
         ),
       )
-    if (updated.affectedRows !== 1) {
+      .returning({ id: attendanceQrTokensTable.id });
+    if (!updated) {
       res.status(404).json({ error: "Active attendance QR token not found." });
       return;
     }
@@ -231,7 +232,8 @@ router.post(
           isNull(registrationsTable.attendanceStatus),
         ),
       )
-    if (attendanceUpdate.affectedRows !== 1) {
+      .returning({ id: registrationsTable.id });
+    if (!attendanceUpdate) {
       res.status(409).json({
         error: "An active registration is required and attendance can only be recorded once.",
       });

@@ -146,7 +146,8 @@ router.post(
             eq(volunteerCertificatesTable.status, "rejected"),
           ),
         )
-      if (updated.affectedRows !== 1) {
+        .returning({ id: volunteerCertificatesTable.id });
+      if (!updated) {
         res.status(409).json({ error: "A certificate request already exists for this activity." });
         return;
       }
@@ -176,7 +177,7 @@ router.post(
               eligible.attendanceHours ?? eligible.volunteerHours,
             ),
           })
-          .$returningId();
+          .returning({ id: volunteerCertificatesTable.id });
         const [inserted] = await db
           .select()
           .from(volunteerCertificatesTable)
@@ -344,8 +345,9 @@ router.post(
           issuedAt,
           rejectionReason: null,
         })
-        .where(eq(volunteerCertificatesTable.id, row.certificate.id));
-      if (updated.affectedRows !== 1) return null;
+        .where(eq(volunteerCertificatesTable.id, row.certificate.id))
+        .returning({ id: volunteerCertificatesTable.id });
+      if (!updated) return null;
       const [issued] = await tx
         .select()
         .from(volunteerCertificatesTable)
@@ -420,8 +422,9 @@ router.post(
           eq(volunteerCertificatesTable.id, row.certificate.id),
           eq(volunteerCertificatesTable.status, "pending"),
         ),
-      );
-    if (updated.affectedRows !== 1) {
+      )
+      .returning({ id: volunteerCertificatesTable.id });
+    if (!updated) {
       res.status(404).json({ error: "Pending certificate request not found." });
       return;
     }

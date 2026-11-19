@@ -12,23 +12,23 @@ A role-based college NSS portal for event registration, attendance, verified vol
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — MySQL connection string; `SESSION_SECRET` — private random value of at least 32 characters
+- Required env: `DATABASE_URL` — PostgreSQL connection string; `SESSION_SECRET` — private random value of at least 32 characters
 
 ## Stack and product
 
 - Responsive NSS management web app for students and authorized staffs
 - Web: React + Vite, TypeScript, generated React Query API hooks
 - API: Express 5, TypeScript; contract-first OpenAPI with Orval-generated Zod schemas
-- Database: MySQL + Drizzle ORM
+- Database: PostgreSQL + Drizzle ORM
 - Authentication: server-side sessions, scrypt password hashes, role checks, CSRF token validation
-- The original brief asked for Flask + MySQL. The workspace stack is React/Vite + Express + MySQL; this is documented in `README.md`.
+- The workspace stack is React/Vite + Express + PostgreSQL; this is documented in `README.md`.
 
 ## Where things live
 
 - `artifacts/nss-connect` — responsive public pages and student/staff dashboards
 - `artifacts/api-server` — auth, event, attendance, announcement, and report APIs
 - `lib/api-spec/openapi.yaml` — API contract source of truth
-- `lib/db/src/schema/nss.ts` — MySQL schema
+- `lib/db/src/schema/nss.ts` — PostgreSQL schema
 - `README.md` — local setup, first staff account creation, and supported stack notes
 
 ## Architecture decisions
